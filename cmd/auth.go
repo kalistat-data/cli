@@ -4,36 +4,95 @@ Copyright © 2026 Kalistat
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"time"
 
+	"github.com/kalistat-data/cli/internal/api"
+	"github.com/kalistat-data/cli/internal/keychain"
 	"github.com/spf13/cobra"
 )
 
-// authCmd represents the auth command
 var authCmd = &cobra.Command{
 	Use:   "auth",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "Manage authentication with the Kalistat API",
+}
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("auth called")
+var authLoginCmd = &cobra.Command{
+	Use:   "login <token>",
+	Short: "Log in with an API token",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := keychain.SetToken(args[0]); err != nil {
+			return fmt.Errorf("failed to save token: %w", err)
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "Logged in.")
+		return nil
+	},
+}
+
+var authStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Verify the stored token against the API",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		out := cmd.OutOrStdout()
+		entry, err := keychain.Get()
+		if errors.Is(err, keychain.ErrNotFound) {
+			fmt.Fprintln(out, "Not logged in.")
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		client, err := api.New()
+		if err != nil {
+			return err
+		}
+		var resp any
+		if err := client.GetJSON("/", &resp); err != nil {
+			fmt.Fprintln(out, "Logged in, but token is not valid.")
+			return err
+		}
+
+		fmt.Fprintln(out, "Logged in.")
+		if !entry.CreatedAt.IsZero() {
+			fmt.Fprintf(out, "Token age: %s.\n", humanizeAge(time.Since(entry.CreatedAt)))
+		}
+		return nil
+	},
+}
+
+var authLogoutCmd = &cobra.Command{
+	Use:   "logout",
+	Short: "Log out and remove the stored API token",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := keychain.Clear(); err != nil {
+			if errors.Is(err, keychain.ErrNotFound) {
+				fmt.Fprintln(cmd.OutOrStdout(), "Not logged in.")
+				return nil
+			}
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "Logged out.")
+		return nil
 	},
 }
 
 func init() {
+	authCmd.AddCommand(authLoginCmd, authStatusCmd, authLogoutCmd)
 	rootCmd.AddCommand(authCmd)
+}
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// authCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// authCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+func humanizeAge(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%d minutes", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d hours", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%d days", int(d.Hours()/24))
+	}
 }

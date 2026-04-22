@@ -11,16 +11,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var sourcesCmd = &cobra.Command{
-	Use:   "sources",
-	Short: "List available data sources (GET /sources)",
+var rootEndpointCmd = &cobra.Command{
+	Use:   "root",
+	Short: "Show API root information (GET /)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := api.New()
 		if err != nil {
 			return err
 		}
 		var resp any
-		if err := client.GetJSON("/sources", &resp); err != nil {
+		if err := client.GetJSON("/", &resp); err != nil {
 			return err
 		}
 		enc := json.NewEncoder(os.Stdout)
@@ -30,5 +30,6 @@ var sourcesCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(sourcesCmd)
+	rootCmd.AddCommand(rootEndpointCmd)
 }
+
