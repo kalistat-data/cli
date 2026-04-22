@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -164,7 +165,11 @@ var categoryAncestorsCmd = &cobra.Command{
 		if jsonOutput {
 			return writeRaw(cmd, body)
 		}
-		return printAncestors(cmd, resp.Data)
+		g := unicodeGlyphs
+		if treeASCII {
+			g = asciiGlyphs
+		}
+		return printAncestors(cmd.OutOrStdout(), resp.Data, g)
 	},
 }
 
@@ -245,18 +250,16 @@ func printCategoryDetail(cmd *cobra.Command, c *api.Category) error {
 	return nil
 }
 
-func printAncestors(cmd *cobra.Command, ancestors []api.Ancestor) error {
-	out := cmd.OutOrStdout()
+// printAncestors renders the breadcrumb chain using tree-style connectors.
+// Glyphs are passed in so the function has no hidden dependency on package
+// state — matching the renderTree(out, roots, g, withDatasets) shape.
+func printAncestors(out io.Writer, ancestors []api.Ancestor, g treeGlyphs) error {
 	if len(ancestors) == 0 {
 		fmt.Fprintln(out, "No ancestors.")
 		return nil
 	}
 	// Breadcrumbs form a single chain (every node is the only child of its
 	// parent), so every connector is the last-sibling glyph.
-	g := unicodeGlyphs
-	if treeASCII {
-		g = asciiGlyphs
-	}
 	for i, a := range ancestors {
 		marker := ""
 		if a.Depth == 0 {
@@ -275,20 +278,14 @@ func printAncestors(cmd *cobra.Command, ancestors []api.Ancestor) error {
 func printCategoryDatasets(cmd *cobra.Command, key string, resp *api.CategoryDatasetsResponse) error {
 	out := cmd.OutOrStdout()
 	fmt.Fprintf(out, "Category: %s\n", key)
-	if p := resp.Meta.Pagination; p != nil {
-		if len(resp.Data) == 0 {
-			fmt.Fprintf(out, "Datasets: 0\n")
-			return nil
-		}
-		start := (p.Page-1)*p.PageSize + 1
-		end := start + len(resp.Data) - 1
-		fmt.Fprintf(out, "Showing %d-%d of %s.\n\n", start, end, plural(p.Total, "dataset", "datasets"))
-	} else {
-		fmt.Fprintf(out, "Datasets: %d\n\n", len(resp.Data))
-	}
 	if len(resp.Data) == 0 {
+		fmt.Fprintln(out, "Datasets: 0")
 		return nil
 	}
+	if resp.Meta.Pagination == nil {
+		fmt.Fprintf(out, "Datasets: %d\n\n", len(resp.Data))
+	}
+	printPaginationHeader(out, resp.Meta.Pagination, len(resp.Data), "dataset", "datasets")
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "CODE\tNAME\tSOURCE\tCATEGORY")
 	for _, ds := range resp.Data {
@@ -301,9 +298,7 @@ func printCategoryDatasets(cmd *cobra.Command, key string, resp *api.CategoryDat
 	if err := tw.Flush(); err != nil {
 		return err
 	}
-	if p := resp.Meta.Pagination; p != nil && p.HasMore {
-		fmt.Fprintf(out, "\nMore results — use --page %d to fetch the next page.\n", p.Page+1)
-	}
+	printPaginationFooter(out, resp.Meta.Pagination)
 	return nil
 }
 

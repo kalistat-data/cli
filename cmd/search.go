@@ -82,11 +82,7 @@ func printSearch(cmd *cobra.Command, resp *api.SearchResponse) error {
 		fmt.Fprintln(out, "No matches.")
 		return nil
 	}
-	if p := resp.Meta.Pagination; p != nil {
-		start := (p.Page-1)*p.PageSize + 1
-		end := start + len(resp.Data) - 1
-		fmt.Fprintf(out, "Showing %d-%d of %s.\n\n", start, end, plural(p.Total, "match", "matches"))
-	}
+	printPaginationHeader(out, resp.Meta.Pagination, len(resp.Data), "match", "matches")
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "CODE\tNAME\tSOURCE\tCATEGORY\tCATEGORY KEY")
 	for _, h := range resp.Data {
@@ -96,17 +92,8 @@ func printSearch(cmd *cobra.Command, resp *api.SearchResponse) error {
 	if err := tw.Flush(); err != nil {
 		return err
 	}
-	if p := resp.Meta.Pagination; p != nil && p.HasMore {
-		fmt.Fprintf(out, "\nMore results — use --page %d to fetch the next page.\n", p.Page+1)
-	}
+	printPaginationFooter(out, resp.Meta.Pagination)
 	return nil
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return strings.TrimSpace(s[:n-1]) + "…"
 }
 
 func init() {

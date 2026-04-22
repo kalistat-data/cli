@@ -184,6 +184,48 @@ func TestSeriesGet_RequiresBothArgs(t *testing.T) {
 	}
 }
 
+func TestSeriesGet_ZeroObservations(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, `{"data":{"ticker":"IT.X/Y","dimensions":[],"values":[]},"meta":{}}`, 0)
+
+	if err := runCLI(t, "series", "get", "IT.X", "Y"); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Observations: 0") {
+		t.Errorf("want 'Observations: 0', got:\n%s", out)
+	}
+	// Empty series must not print the observations table header.
+	if strings.Contains(out, "TIME") || strings.Contains(out, "VALUE") {
+		t.Errorf("empty series should not print observation table:\n%s", out)
+	}
+	// No range should appear in parentheses after the count.
+	if strings.Contains(out, "Observations: 0 (") {
+		t.Errorf("empty series should not advertise a time range:\n%s", out)
+	}
+}
+
+func TestSeriesGet_SingleObservationRangeIsSinglePoint(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, `{"data":{"ticker":"IT.X/Y","dimensions":[],"values":[{"time":"2024-01","value":42}]},"meta":{}}`, 0)
+
+	if err := runCLI(t, "series", "get", "IT.X", "Y"); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	// Single observation should render range as "(T)", never "T → T".
+	if strings.Contains(out, "2024-01 → 2024-01") {
+		t.Errorf("single-observation range must not use the arrow form:\n%s", out)
+	}
+	if !strings.Contains(out, "Observations: 1 (2024-01)") {
+		t.Errorf("single-observation range should appear as '(2024-01)':\n%s", out)
+	}
+	// The observations table itself should still render — 1 row is a row.
+	if !strings.Contains(out, "TIME") || !strings.Contains(out, "42") {
+		t.Errorf("single-observation should still print the table:\n%s", out)
+	}
+}
+
 func TestSeriesList_RequiresBothArgs(t *testing.T) {
 	resetCmd(t)
 

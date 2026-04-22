@@ -454,6 +454,56 @@ func TestCategoryDatasets_EmptyList(t *testing.T) {
 	}
 }
 
+// ---------- --json passthrough for non-tree subcommands ----------
+
+func TestCategoryGet_JSONPassthrough(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, categoryGetJSON, 0)
+
+	if err := runCLI(t, "category", "get", "IT.5", "--json"); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &got); err != nil {
+		t.Fatalf("not valid JSON: %v\n%s", err, buf.String())
+	}
+	if _, ok := got["data"]; !ok {
+		t.Errorf("missing 'data' key")
+	}
+}
+
+func TestCategoryAncestors_JSONPassthrough(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, ancestorsJSON, 0)
+
+	if err := runCLI(t, "category", "ancestors", "IT.5.2.1", "--json"); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &got); err != nil {
+		t.Fatalf("not valid JSON: %v\n%s", err, buf.String())
+	}
+	if _, ok := got["data"]; !ok {
+		t.Errorf("missing 'data' key")
+	}
+}
+
+func TestCategoryDatasets_JSONPassthrough(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, categoryDatasetsJSON, 0)
+
+	if err := runCLI(t, "category", "datasets", "IT.5.2.1", "--json"); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &got); err != nil {
+		t.Fatalf("not valid JSON: %v\n%s", err, buf.String())
+	}
+	if _, ok := got["data"]; !ok {
+		t.Errorf("missing 'data' key")
+	}
+}
+
 // ---------- error paths / validation ----------
 
 func TestCategory_APIErrorSurfacesCleanly(t *testing.T) {

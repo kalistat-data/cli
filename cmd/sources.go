@@ -14,6 +14,7 @@ import (
 var sourcesCmd = &cobra.Command{
 	Use:   "sources",
 	Short: "List available data sources",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := apiClient()
 		if err != nil {

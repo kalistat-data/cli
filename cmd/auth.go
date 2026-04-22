@@ -156,10 +156,3 @@ func humanizeAge(d time.Duration) string {
 		return plural(int(d.Hours()/24), "day", "days")
 	}
 }
-
-func plural(n int, singular, plural string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, singular)
-	}
-	return fmt.Sprintf("%d %s", n, plural)
-}

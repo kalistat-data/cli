@@ -15,6 +15,13 @@ import (
 // resetCmd gives each test a clean keychain, fresh writers, and empty stdin.
 // All mutations of rootCmd are rolled back via t.Cleanup so tests don't leak
 // state to each other regardless of order or future parallelism.
+//
+// Contract: every command file that owns package-level flag variables must
+// expose a resetXxxFlags() function and register it below in BOTH the setup
+// and the t.Cleanup block. Cobra never re-zeroes flag-bound package vars
+// when the flag is absent on the command line, so one test setting
+// --page=3 would silently change the default for every later test.
+// Current participants: resetSearchFlags, resetCategoryFlags.
 func resetCmd(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	keyring.MockInit()

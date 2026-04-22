@@ -105,7 +105,7 @@ func printSeriesGet(cmd *cobra.Command, s *api.Series) error {
 		dims := make([]api.SeriesDimension, len(s.Dimensions))
 		copy(dims, s.Dimensions)
 		sort.Slice(dims, func(i, j int) bool { return dims[i].Position < dims[j].Position })
-		dw := tabwriter.NewWriter(out, 2, 0, 2, ' ', 0)
+		dw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 		for _, d := range dims {
 			fmt.Fprintf(dw, "  %s (%s)\t%s\n", d.Label, d.Key, d.Value)
 		}

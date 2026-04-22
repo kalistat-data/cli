@@ -4,7 +4,6 @@ Copyright © 2026 Kalistat
 package cmd
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 
@@ -17,6 +16,7 @@ const cliVersion = "v1"
 var infoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Show CLI and API information",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := apiClient()
 		if err != nil {
@@ -46,20 +46,6 @@ func printInfo(cmd *cobra.Command, r api.Root) error {
 	}
 	if r.RateLimit.RequestsPerMinute > 0 {
 		fmt.Fprintf(out, "  Rate limit: %d requests/minute\n", r.RateLimit.RequestsPerMinute)
-	}
-	return nil
-}
-
-// writeRaw copies the server's JSON body verbatim to the command's stdout,
-// adding a trailing newline if the body doesn't already have one.
-func writeRaw(cmd *cobra.Command, body []byte) error {
-	out := cmd.OutOrStdout()
-	if _, err := out.Write(body); err != nil {
-		return err
-	}
-	if !bytes.HasSuffix(body, []byte("\n")) {
-		_, err := fmt.Fprintln(out)
-		return err
 	}
 	return nil
 }
