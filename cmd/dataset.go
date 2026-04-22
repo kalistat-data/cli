@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"sort"
 	"text/tabwriter"
@@ -86,36 +87,32 @@ func printDataset(cmd *cobra.Command, d *api.Dataset) error {
 		fmt.Fprintf(out, "Series count: %d\n", d.SeriesCount)
 	}
 
-	if len(d.Dimensions) > 0 {
-		fmt.Fprintln(out)
-		fmt.Fprintln(out, "Dimensions:")
-		dims := append([]api.Dimension(nil), d.Dimensions...)
-		sort.Slice(dims, func(i, j int) bool { return dims[i].Position < dims[j].Position })
-		tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(tw, "  POS\tKEY\tLABEL")
-		for _, dim := range dims {
-			fmt.Fprintf(tw, "  %d\t%s\t%s\n", dim.Position, dim.Key, dim.Label)
-		}
-		if err := tw.Flush(); err != nil {
-			return err
-		}
+	if err := printDimensionTable(out, "Dimensions:", d.Dimensions); err != nil {
+		return err
 	}
-
-	if len(d.TimeDimensions) > 0 {
-		fmt.Fprintln(out)
-		fmt.Fprintln(out, "Time dimensions:")
-		tdims := append([]api.TimeDimension(nil), d.TimeDimensions...)
-		sort.Slice(tdims, func(i, j int) bool { return tdims[i].Position < tdims[j].Position })
-		tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(tw, "  POS\tKEY\tLABEL")
-		for _, td := range tdims {
-			fmt.Fprintf(tw, "  %d\t%s\t%s\n", td.Position, td.Key, td.Label)
-		}
-		if err := tw.Flush(); err != nil {
-			return err
-		}
+	if err := printDimensionTable(out, "Time dimensions:", d.TimeDimensions); err != nil {
+		return err
 	}
 	return nil
+}
+
+// printDimensionTable renders a titled, position-sorted table of dimensions.
+// No-op when dims is empty, so callers don't need to guard the call.
+func printDimensionTable(out io.Writer, title string, dims []api.Dimension) error {
+	if len(dims) == 0 {
+		return nil
+	}
+	sorted := append([]api.Dimension(nil), dims...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Position < sorted[j].Position })
+
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, title)
+	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "  POS\tKEY\tLABEL")
+	for _, d := range sorted {
+		fmt.Fprintf(tw, "  %d\t%s\t%s\n", d.Position, d.Key, d.Label)
+	}
+	return tw.Flush()
 }
 
 func printDimensionValues(cmd *cobra.Command, dimKey string, values []api.DimensionValue) error {

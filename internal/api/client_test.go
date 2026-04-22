@@ -56,6 +56,43 @@ func TestNewWithToken_URLValidation(t *testing.T) {
 	}
 }
 
+func TestNewWithToken_ErrorRedactsUserinfo(t *testing.T) {
+	cases := []struct {
+		name      string
+		baseURL   string
+		wantAbsent string
+	}{
+		{"password in userinfo", "http://user:supersecret@attacker.com/v1", "supersecret"},
+		{"password in invalid scheme", "gopher://user:supersecret@example.com", "supersecret"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := NewWithToken("t", c.baseURL)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if strings.Contains(err.Error(), c.wantAbsent) {
+				t.Errorf("error leaks secret %q: %q", c.wantAbsent, err.Error())
+			}
+			if !strings.Contains(err.Error(), "REDACTED") {
+				t.Errorf("error should contain REDACTED placeholder: %q", err.Error())
+			}
+		})
+	}
+}
+
+func TestNewWithToken_StripsUserinfoFromStoredBaseURL(t *testing.T) {
+	// Userinfo on a valid https URL would silently ride every request as
+	// Basic auth alongside the Bearer token — strip it at construction.
+	c, err := NewWithToken("tok", "https://user:secret@app.kalistat.com/api/v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(c.BaseURL, "secret") || strings.Contains(c.BaseURL, "user") {
+		t.Errorf("BaseURL should not contain userinfo: %q", c.BaseURL)
+	}
+}
+
 func TestNewWithToken_EmptyBaseURLUsesDefault(t *testing.T) {
 	c, err := NewWithToken("t", "")
 	if err != nil {
@@ -263,5 +300,90 @@ func TestGetJSON_LimitsResponseBody(t *testing.T) {
 	body, _ := c.GetJSON("/", nil, nil)
 	if len(body) > 10<<20 {
 		t.Errorf("read %d bytes, want <= 10 MiB (LimitReader should cap)", len(body))
+	}
+}
+
+// TestSafeRedirect_Policy pins the redirect-policy decision table directly,
+// without staging real TLS or cross-host redirects. Each row calls the
+// policy function with a constructed (req, via[0]) pair.
+func TestSafeRedirect_Policy(t *testing.T) {
+	mkReq := func(s string) *http.Request {
+		u, err := url.Parse(s)
+		if err != nil {
+			t.Fatalf("bad test URL %q: %v", s, err)
+		}
+		return &http.Request{URL: u}
+	}
+
+	cases := []struct {
+		name      string
+		original  string
+		next      string
+		viaLen    int
+		wantErr   bool
+		wantMatch string
+	}{
+		{"same host same scheme (ok)", "https://api.example/a", "https://api.example/b", 1, false, ""},
+		{"http -> https (ok)", "http://127.0.0.1:1/a", "http://127.0.0.1:1/b", 1, false, ""},
+		{"https -> http same host (reject)", "https://api.example/a", "http://api.example/a", 1, true, "refusing redirect"},
+		{"cross-host (reject)", "https://api.example/a", "https://other.example/a", 1, true, "cross-host"},
+		{"too many redirects (reject)", "https://api.example/a", "https://api.example/b", 10, true, "too many"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			via := make([]*http.Request, c.viaLen)
+			via[0] = mkReq(c.original)
+			err := safeRedirect(mkReq(c.next), via)
+			if (err != nil) != c.wantErr {
+				t.Fatalf("err = %v, wantErr=%v", err, c.wantErr)
+			}
+			if c.wantErr && !strings.Contains(err.Error(), c.wantMatch) {
+				t.Errorf("err = %q, want to contain %q", err.Error(), c.wantMatch)
+			}
+		})
+	}
+}
+
+// TestGetJSON_RefusesCrossHostRedirect is an end-to-end confirmation that
+// the http.Client actually uses our policy — a live cross-host redirect is
+// refused instead of followed.
+func TestGetJSON_RefusesCrossHostRedirect(t *testing.T) {
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("other-host server should not be reached: %s", r.URL)
+	}))
+	defer other.Close()
+
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/somewhere", http.StatusFound)
+	}))
+	defer origin.Close()
+
+	c, _ := NewWithToken("tok", origin.URL)
+	_, err := c.GetJSON("/", nil, nil)
+	if err == nil {
+		t.Fatal("expected cross-host redirect to be rejected")
+	}
+}
+
+// TestGetJSON_FollowsSameHostSameSchemeRedirect is the positive counterpart:
+// a benign redirect within the same authority is still followed.
+func TestGetJSON_FollowsSameHostSameSchemeRedirect(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/end", http.StatusFound)
+	})
+	mux.HandleFunc("/end", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c, _ := NewWithToken("tok", server.URL)
+	body, err := c.GetJSON("/start", nil, nil)
+	if err != nil {
+		t.Fatalf("same-host redirect should succeed: %v", err)
+	}
+	if !strings.Contains(string(body), "ok") {
+		t.Errorf("unexpected body: %q", body)
 	}
 }

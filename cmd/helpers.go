@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/kalistat-data/cli/internal/api"
 	"github.com/kalistat-data/cli/internal/keychain"
@@ -71,6 +72,25 @@ func plural(n int, singular, pluralForm string) string {
 		return fmt.Sprintf("%d %s", n, singular)
 	}
 	return fmt.Sprintf("%d %s", n, pluralForm)
+}
+
+// sanitizeForTerminal drops ASCII/Unicode control characters from s (except
+// tab and newline) so user-supplied strings echoed to stdout can't inject
+// ANSI escape sequences, reposition the cursor, or trigger OSC handlers.
+func sanitizeForTerminal(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r == '\t' || r == '\n' {
+			b.WriteRune(r)
+			continue
+		}
+		if unicode.IsControl(r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // truncate caps a string at n bytes and appends an ellipsis if it was cut.

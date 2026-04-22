@@ -313,7 +313,12 @@ func init() {
 	categoryTreeCmd.Flags().IntVar(&treeDepth, "depth", 0, "Depth (1-5). Default 2.")
 	categoryTreeCmd.Flags().StringVar(&treeSource, "source", "", "Filter roots by source: istat or eurostat (ignored when <key> is given)")
 	categoryTreeCmd.Flags().BoolVar(&treeWithDatasets, "with-datasets", false, "Embed dataset stubs under categories that hold them")
-	categoryCmd.PersistentFlags().BoolVar(&treeASCII, "ascii", false, "Use ASCII connectors instead of Unicode box-drawing in tree/ancestors output")
+	// --ascii is only meaningful for the two commands that render a tree;
+	// registering it on the parent would pollute help for `get` / `datasets`.
+	// Sharing the same package-level var across both is safe because cobra
+	// only parses one subcommand per invocation.
+	categoryTreeCmd.Flags().BoolVar(&treeASCII, "ascii", false, "Use ASCII connectors instead of Unicode box-drawing")
+	categoryAncestorsCmd.Flags().BoolVar(&treeASCII, "ascii", false, "Use ASCII connectors instead of Unicode box-drawing")
 
 	categoryDatasetsCmd.Flags().BoolVar(&catDatasetsRecursive, "recursive", false, "Include datasets from descendant categories")
 	categoryDatasetsCmd.Flags().IntVar(&catDatasetsPage, "page", 0, "Page number (default 1)")

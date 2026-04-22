@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -50,23 +51,67 @@ func NewWithToken(token, baseURL string) (*Client, error) {
 		baseURL = DefaultBaseURL
 	}
 	parsed, err := url.Parse(baseURL)
+	safe := redactURL(baseURL, parsed)
 	if err != nil || parsed.Host == "" {
-		return nil, fmt.Errorf("invalid base URL %q", baseURL)
+		return nil, fmt.Errorf("invalid base URL %q", safe)
 	}
 	switch parsed.Scheme {
 	case "https":
 	case "http":
 		if !isLoopback(parsed.Host) {
-			return nil, fmt.Errorf("base URL %q must use https (http allowed only for loopback hosts)", baseURL)
+			return nil, fmt.Errorf("base URL %q must use https (http allowed only for loopback hosts)", safe)
 		}
 	default:
-		return nil, fmt.Errorf("base URL %q must use https or http", baseURL)
+		return nil, fmt.Errorf("base URL %q must use https or http", safe)
 	}
+	// Strip any userinfo from the stored base URL so we never accidentally
+	// send embedded credentials as Basic auth alongside the Bearer token.
+	parsed.User = nil
 	return &Client{
 		BaseURL: strings.TrimRight(parsed.String(), "/"),
 		Token:   token,
-		HTTP:    &http.Client{Timeout: 30 * time.Second},
+		HTTP: &http.Client{
+			Timeout:       30 * time.Second,
+			CheckRedirect: safeRedirect,
+		},
 	}, nil
+}
+
+// safeRedirect enforces two invariants before following a redirect:
+//   - never downgrade from https to http (would send the Bearer token in
+//     cleartext if the same host also serves plain HTTP);
+//   - never follow to a different host (the token belongs to the original
+//     host only — Go's default policy strips Authorization cross-host, but
+//     we refuse the redirect entirely so the user notices).
+//
+// Also caps redirect chains at 10, matching Go's default.
+func safeRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) == 0 {
+		return nil
+	}
+	original := via[0]
+	if original.URL.Scheme == "https" && req.URL.Scheme != "https" {
+		return fmt.Errorf("refusing redirect from https to %s (would expose credentials)", req.URL.Scheme)
+	}
+	if req.URL.Host != original.URL.Host {
+		return fmt.Errorf("refusing cross-host redirect to %s", req.URL.Host)
+	}
+	if len(via) >= 10 {
+		return errors.New("too many redirects")
+	}
+	return nil
+}
+
+// redactURL returns a form of `raw` safe for echoing in error messages:
+// any userinfo (e.g. `https://user:secret@host`) is replaced with a
+// REDACTED placeholder so embedded passwords don't leak into stderr.
+func redactURL(raw string, parsed *url.URL) string {
+	if parsed == nil || parsed.User == nil {
+		return raw
+	}
+	copy := *parsed
+	copy.User = url.UserPassword(parsed.User.Username(), "REDACTED")
+	return copy.String()
 }
 
 func isLoopback(host string) bool {

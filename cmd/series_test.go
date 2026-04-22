@@ -184,6 +184,32 @@ func TestSeriesGet_RequiresBothArgs(t *testing.T) {
 	}
 }
 
+func TestSeriesList_PatternSanitizedBeforeEcho(t *testing.T) {
+	buf := loggedIn(t)
+	// Server sees the pattern untouched (url.Values handles encoding safely).
+	var gotQuery string
+	mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(seriesListResponseJSON))
+	})
+
+	// Pattern with an embedded ANSI "clear screen" sequence.
+	attack := "A.*.B\x1b[2J\x1b]0;evil\x07"
+	if err := runCLI(t, "series", "list", "IT.LAMA.132", attack); err != nil {
+		t.Fatal(err)
+	}
+	// The terminal-visible Pattern line must not contain any ESC or BEL chars.
+	out := buf.String()
+	if strings.ContainsAny(out, "\x1b\x07") {
+		t.Errorf("sanitized output still contains control chars:\n%q", out)
+	}
+	// But the server should have received the pattern verbatim (URL-encoded).
+	if !strings.Contains(gotQuery, "%1B%5B2J") {
+		t.Errorf("server did not receive raw pattern in query: %q", gotQuery)
+	}
+}
+
 func TestSeriesGet_ZeroObservations(t *testing.T) {
 	buf := loggedIn(t)
 	mockJSONAPI(t, `{"data":{"ticker":"IT.X/Y","dimensions":[],"values":[]},"meta":{}}`, 0)
@@ -324,8 +350,8 @@ func TestSeries_RejectsPathTraversal(t *testing.T) {
 		{"list: dataset is .", []string{"series", "list", ".", "A.B"}},
 		{"list: dataset has slash", []string{"series", "list", "a/b", "A.B"}},
 		{"get: dataset is ..", []string{"series", "get", "..", "A.B"}},
-		{"get: serie-code is ..", []string{"series", "get", "IT.LAMA.132", ".."}},
-		{"get: serie-code has slash", []string{"series", "get", "IT.LAMA.132", "A/B"}},
+		{"get: series-code is ..", []string{"series", "get", "IT.LAMA.132", ".."}},
+		{"get: series-code has slash", []string{"series", "get", "IT.LAMA.132", "A/B"}},
 		{"get: dataset empty", []string{"series", "get", "", "A.B"}},
 	}
 	for _, c := range cases {

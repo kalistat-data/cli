@@ -52,22 +52,22 @@ to fetch the observations for one of them.`,
 }
 
 var seriesGetCmd = &cobra.Command{
-	Use:   "get <dataset> <serie-code>",
+	Use:   "get <dataset> <series-code>",
 	Short: "Fetch observations for a single series",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		dataset, serieCode := args[0], args[1]
+		dataset, seriesCode := args[0], args[1]
 		if err := validateSegment("dataset", dataset); err != nil {
 			return err
 		}
-		if err := validateSegment("series code", serieCode); err != nil {
+		if err := validateSegment("series code", seriesCode); err != nil {
 			return err
 		}
 		client, err := apiClient()
 		if err != nil {
 			return err
 		}
-		path := "/datasets/" + url.PathEscape(dataset) + "/series/" + url.PathEscape(serieCode)
+		path := "/datasets/" + url.PathEscape(dataset) + "/series/" + url.PathEscape(seriesCode)
 		var resp api.SeriesResponse
 		body, err := client.GetJSON(path, nil, &resp)
 		if err != nil {
@@ -82,7 +82,7 @@ var seriesGetCmd = &cobra.Command{
 
 func printSeriesList(cmd *cobra.Command, pattern string, resp *api.SeriesListResponse) error {
 	out := cmd.OutOrStdout()
-	fmt.Fprintf(out, "Pattern: %s\n", pattern)
+	fmt.Fprintf(out, "Pattern: %s\n", sanitizeForTerminal(pattern))
 	fmt.Fprintf(out, "Matched: %d series\n\n", len(resp.Data))
 	if len(resp.Data) == 0 {
 		return nil

@@ -100,12 +100,6 @@ type Dimension struct {
 	Position int    `json:"position"`
 }
 
-type TimeDimension struct {
-	Key      string `json:"key"`
-	Label    string `json:"label"`
-	Position int    `json:"position"`
-}
-
 type Dataset struct {
 	Code           string            `json:"code"`
 	Name           string            `json:"name"`
@@ -114,7 +108,7 @@ type Dataset struct {
 	CategoryKey    string            `json:"category_key,omitempty"`
 	SeriesCount    int               `json:"series_count,omitempty"`
 	Dimensions     []Dimension       `json:"dimensions"`
-	TimeDimensions []TimeDimension   `json:"time_dimensions"`
+	TimeDimensions []Dimension       `json:"time_dimensions"`
 	Links          map[string]string `json:"links"`
 }
 

@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -55,6 +56,38 @@ func TestPrintError_PlainErrorGoesToStderr(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "Error: boom") {
 		t.Errorf("stderr should contain formatted error: %q", stderr.String())
+	}
+}
+
+// TestPrintError_IntegrationWithJSONFlag pins the end-to-end contract that
+// `kalistat <cmd> --json` against a failing endpoint produces the raw API
+// error body on stdout (not the formatted message on stderr). The unit
+// tests above exercise printError in isolation with a hardcoded bool; this
+// test confirms that cobra actually wires --json into the jsonOutput var
+// that Execute() reads.
+func TestPrintError_IntegrationWithJSONFlag(t *testing.T) {
+	loggedIn(t)
+	mockJSONAPI(t, `{"error":{"code":"unauthorized","message":"bad"}}`, http.StatusUnauthorized)
+
+	err := runCLI(t, "sources", "--json")
+	if !jsonOutput {
+		t.Fatal("--json flag did not set jsonOutput; cobra wiring is broken")
+	}
+	var apiErr *api.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %T %v, want *APIError", err, err)
+	}
+
+	// Simulate what Execute does with the same writers Execute would use.
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	printError(stdout, stderr, err, jsonOutput)
+
+	if !bytes.Contains(stdout.Bytes(), []byte(`"unauthorized"`)) {
+		t.Errorf("raw JSON body should be on stdout: %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr should be empty in JSON mode: %q", stderr.String())
 	}
 }
 

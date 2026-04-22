@@ -52,6 +52,7 @@ When stdin is a pipe, the first line is read as the token — useful for scripts
 var authStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Verify the stored token against the API",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		out := cmd.OutOrStdout()
 		entry, err := keychain.Get()
@@ -83,6 +84,7 @@ var authStatusCmd = &cobra.Command{
 var authLogoutCmd = &cobra.Command{
 	Use:   "logout",
 	Short: "Log out and remove the stored API token",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := keychain.Clear(); err != nil {
 			if errors.Is(err, keychain.ErrNotFound) {

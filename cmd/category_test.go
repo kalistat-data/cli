@@ -472,6 +472,18 @@ func TestCategoryGet_JSONPassthrough(t *testing.T) {
 	}
 }
 
+func TestCategoryAncestors_EmptyList(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, `{"data":[],"meta":{}}`, 0)
+
+	if err := runCLI(t, "category", "ancestors", "IT"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "No ancestors") {
+		t.Errorf("empty ancestor list should say 'No ancestors.', got: %q", buf.String())
+	}
+}
+
 func TestCategoryAncestors_JSONPassthrough(t *testing.T) {
 	buf := loggedIn(t)
 	mockJSONAPI(t, ancestorsJSON, 0)
