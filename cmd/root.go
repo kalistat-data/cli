@@ -26,6 +26,10 @@ var rootCmd = &cobra.Command{
 // registration and access consistent across the whole tree.
 var jsonOutput bool
 
+// baseURL is bound to the --base-url persistent flag. Empty means
+// "fall back to $KALISTAT_API_URL, then to the default".
+var baseURL string
+
 // errSilent signals "exit non-zero, but do not print anything else" — the
 // command has already produced user-facing output.
 var errSilent = errors.New("silent")
@@ -56,4 +60,6 @@ func printError(stdout, stderr io.Writer, err error, jsonMode bool) {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output raw JSON response")
+	rootCmd.PersistentFlags().StringVar(&baseURL, "base-url", "",
+		"API base URL (overrides $KALISTAT_API_URL; default: "+api.DefaultBaseURL+")")
 }

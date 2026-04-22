@@ -7,10 +7,12 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/kalistat-data/cli/internal/api"
 	"github.com/kalistat-data/cli/internal/keychain"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -66,7 +68,7 @@ var authStatusCmd = &cobra.Command{
 			return err
 		}
 		if _, err := client.GetJSON("/", nil); err != nil {
-			fmt.Fprintln(out, "Logged in, but token is not valid.")
+			fmt.Fprintln(out, describeStatusError(err))
 			return errSilent
 		}
 
@@ -92,6 +94,24 @@ var authLogoutCmd = &cobra.Command{
 		fmt.Fprintln(cmd.OutOrStdout(), "Logged out.")
 		return nil
 	},
+}
+
+// describeStatusError picks a user-facing message for an `auth status` failure,
+// distinguishing authentication problems from transport/server problems so the
+// user doesn't chase the wrong remedy (e.g. regenerating a token that is fine).
+func describeStatusError(err error) string {
+	var apiErr *api.APIError
+	if !errors.As(err, &apiErr) {
+		return "Logged in, but the API is unreachable."
+	}
+	switch {
+	case apiErr.StatusCode == http.StatusUnauthorized || apiErr.StatusCode == http.StatusForbidden:
+		return "Logged in, but the token is not valid."
+	case apiErr.StatusCode >= 500:
+		return fmt.Sprintf("Logged in, but the API returned a server error (%d).", apiErr.StatusCode)
+	default:
+		return fmt.Sprintf("Logged in, but the API returned an unexpected status (%d).", apiErr.StatusCode)
+	}
 }
 
 // readToken reads a token from the command's stdin. If stdin is a terminal

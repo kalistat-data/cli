@@ -19,6 +19,7 @@ func resetCmd(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	keyring.MockInit()
 	jsonOutput = false
+	baseURL = ""
 
 	buf := &bytes.Buffer{}
 	rootCmd.SetOut(buf)
@@ -30,6 +31,7 @@ func resetCmd(t *testing.T) *bytes.Buffer {
 		rootCmd.SetIn(nil)
 		rootCmd.SetArgs(nil)
 		jsonOutput = false
+		baseURL = ""
 	})
 	return buf
 }
@@ -159,31 +161,57 @@ func TestAuthStatus_ValidToken(t *testing.T) {
 	}
 }
 
-func TestAuthStatus_InvalidTokenIsSilent(t *testing.T) {
-	buf := loggedIn(t)
-	mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-	})
-
-	err := runCLI(t, "auth", "status")
-	if !errors.Is(err, errSilent) {
-		t.Fatalf("err = %v, want errSilent", err)
+func TestAuthStatus_ClassifiesErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		status     int
+		wantOutput string
+	}{
+		{"401 unauthorized", http.StatusUnauthorized, "token is not valid"},
+		{"403 forbidden", http.StatusForbidden, "token is not valid"},
+		{"500 internal", http.StatusInternalServerError, "server error (500)"},
+		{"503 unavailable", http.StatusServiceUnavailable, "server error (503)"},
+		{"404 unexpected", http.StatusNotFound, "unexpected status (404)"},
 	}
-	if !strings.Contains(buf.String(), "not valid") {
-		t.Errorf("output = %q, want to contain %q", buf.String(), "not valid")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			buf := loggedIn(t)
+			status := c.status
+			mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+				http.Error(w, http.StatusText(status), status)
+			})
+
+			err := runCLI(t, "auth", "status")
+			if !errors.Is(err, errSilent) {
+				t.Fatalf("err = %v, want errSilent", err)
+			}
+			if !strings.Contains(buf.String(), c.wantOutput) {
+				t.Errorf("output = %q, want to contain %q", buf.String(), c.wantOutput)
+			}
+			// Cross-cutting guarantee: status-level problems never claim auth fault.
+			if c.status >= 500 && strings.Contains(buf.String(), "token is not valid") {
+				t.Errorf("5xx response incorrectly framed as auth problem: %q", buf.String())
+			}
+		})
 	}
 }
 
 func TestAuthStatus_APIUnreachable(t *testing.T) {
-	loggedIn(t)
+	buf := loggedIn(t)
 	// Point at a closed server: mock it and immediately close.
 	server := mockAPI(t, func(http.ResponseWriter, *http.Request) {})
 	server.Close()
 
 	err := runCLI(t, "auth", "status")
-	// The API call fails → status prints its line and returns errSilent.
 	if !errors.Is(err, errSilent) {
-		t.Errorf("err = %v, want errSilent for network failure", err)
+		t.Fatalf("err = %v, want errSilent for network failure", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "unreachable") {
+		t.Errorf("output = %q, want to contain 'unreachable'", out)
+	}
+	if strings.Contains(out, "token is not valid") {
+		t.Errorf("transport failure incorrectly framed as auth problem: %q", out)
 	}
 }
 
