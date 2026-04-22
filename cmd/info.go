@@ -23,7 +23,7 @@ var infoCmd = &cobra.Command{
 			return err
 		}
 		var resp api.RootResponse
-		body, err := client.GetJSON("/", &resp)
+		body, err := client.GetJSON("/", nil, &resp)
 		if err != nil {
 			return err
 		}

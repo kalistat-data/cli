@@ -20,7 +20,7 @@ var sourcesCmd = &cobra.Command{
 			return err
 		}
 		var resp api.SourcesResponse
-		body, err := client.GetJSON("/sources", &resp)
+		body, err := client.GetJSON("/sources", nil, &resp)
 		if err != nil {
 			return err
 		}

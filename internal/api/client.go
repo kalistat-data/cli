@@ -83,14 +83,19 @@ func isLoopback(host string) bool {
 	return false
 }
 
-// GetJSON performs a GET against path, decodes the body into out (if non-nil),
-// and returns the raw body. A non-2xx response becomes an *APIError.
-func (c *Client) GetJSON(path string, out any) ([]byte, error) {
-	target, err := url.JoinPath(c.BaseURL, path)
+// GetJSON performs a GET against path (joined to the base URL) with the given
+// query, decodes the body into out (if non-nil), and returns the raw body.
+// A non-2xx response becomes an *APIError. `query` may be nil.
+func (c *Client) GetJSON(path string, query url.Values, out any) ([]byte, error) {
+	base, err := url.Parse(c.BaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("build URL: %w", err)
+		return nil, fmt.Errorf("base URL: %w", err)
 	}
-	req, err := http.NewRequest(http.MethodGet, target, nil)
+	u := base.JoinPath(path)
+	if query != nil {
+		u.RawQuery = query.Encode()
+	}
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
 	}

@@ -77,7 +77,7 @@ func TestGetJSON_SendsBearerHeader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.GetJSON("/", nil); err != nil {
+	if _, err := c.GetJSON("/", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if gotAuth != "Bearer tok" {
@@ -96,7 +96,7 @@ func TestGetJSON_DecodesIntoOut(t *testing.T) {
 		Name  string `json:"name"`
 		Count int    `json:"count"`
 	}
-	body, err := c.GetJSON("/", &got)
+	body, err := c.GetJSON("/", nil, &got)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestGetJSON_DecodeErrorWhenBodyIsNotJSON(t *testing.T) {
 	var target struct {
 		Data string `json:"data"`
 	}
-	body, err := c.GetJSON("/", &target)
+	body, err := c.GetJSON("/", nil, &target)
 	if err == nil {
 		t.Fatal("expected decode error")
 	}
@@ -138,7 +138,7 @@ func TestGetJSON_ParsesAPIErrorEnvelope(t *testing.T) {
 	defer server.Close()
 
 	c, _ := NewWithToken("tok", server.URL)
-	_, err := c.GetJSON("/", nil)
+	_, err := c.GetJSON("/", nil, nil)
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) {
 		t.Fatalf("err = %v (%T), want *APIError", err, err)
@@ -156,7 +156,7 @@ func TestGetJSON_APIErrorWhenBodyIsNotJSONEnvelope(t *testing.T) {
 	defer server.Close()
 
 	c, _ := NewWithToken("tok", server.URL)
-	_, err := c.GetJSON("/", nil)
+	_, err := c.GetJSON("/", nil, nil)
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) {
 		t.Fatalf("err = %v (%T), want *APIError", err, err)
@@ -176,7 +176,7 @@ func TestGetJSON_TransportError(t *testing.T) {
 	server.Close() // close immediately — subsequent dials will fail
 
 	c, _ := NewWithToken("tok", server.URL)
-	_, err := c.GetJSON("/", nil)
+	_, err := c.GetJSON("/", nil, nil)
 	if err == nil {
 		t.Fatal("expected transport error")
 	}
@@ -192,7 +192,7 @@ func TestGetJSON_InvalidPathSegment(t *testing.T) {
 	c, _ := NewWithToken("tok", "https://app.kalistat.com/api/v1")
 	// %-escape hex that isn't valid hex forces the underlying URL parse to fail
 	// somewhere — either in JoinPath or in http.NewRequest.
-	_, err := c.GetJSON("/%zz", nil)
+	_, err := c.GetJSON("/%zz", nil, nil)
 	if err == nil {
 		t.Fatal("expected URL error for bad percent-escape")
 	}
@@ -214,7 +214,7 @@ func TestGetJSON_LimitsResponseBody(t *testing.T) {
 	defer server.Close()
 
 	c, _ := NewWithToken("tok", server.URL)
-	body, _ := c.GetJSON("/", nil)
+	body, _ := c.GetJSON("/", nil, nil)
 	if len(body) > 10<<20 {
 		t.Errorf("read %d bytes, want <= 10 MiB (LimitReader should cap)", len(body))
 	}

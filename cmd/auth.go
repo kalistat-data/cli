@@ -67,7 +67,7 @@ var authStatusCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if _, err := client.GetJSON("/", nil); err != nil {
+		if _, err := client.GetJSON("/", nil, nil); err != nil {
 			fmt.Fprintln(out, describeStatusError(err))
 			return errSilent
 		}

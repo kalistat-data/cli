@@ -2,9 +2,18 @@ package api
 
 import "time"
 
+type Pagination struct {
+	Total    int  `json:"total"`
+	Page     int  `json:"page"`
+	PageSize int  `json:"page_size"`
+	HasMore  bool `json:"has_more"`
+}
+
 type Meta struct {
-	Count       int       `json:"count,omitempty"`
-	GeneratedAt time.Time `json:"generated_at"`
+	Count       int         `json:"count,omitempty"`
+	Query       string      `json:"query,omitempty"`
+	Pagination  *Pagination `json:"pagination,omitempty"`
+	GeneratedAt time.Time   `json:"generated_at"`
 }
 
 type Source struct {
@@ -35,4 +44,52 @@ type Root struct {
 type RootResponse struct {
 	Data Root `json:"data"`
 	Meta Meta `json:"meta"`
+}
+
+type SearchCategory struct {
+	Name   string `json:"name"`
+	Key    string `json:"key"`
+	Source string `json:"source"`
+}
+
+type SearchHit struct {
+	Code     string            `json:"code"`
+	Name     string            `json:"name"`
+	Type     string            `json:"type"`
+	Source   string            `json:"source"`
+	Category SearchCategory    `json:"category"`
+	Links    map[string]string `json:"links"`
+}
+
+type SearchResponse struct {
+	Data []SearchHit `json:"data"`
+	Meta Meta        `json:"meta"`
+}
+
+type Observation struct {
+	Time  string   `json:"time"`
+	Value *float64 `json:"value"`
+}
+
+type SeriesDimension struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Position int    `json:"position"`
+	Value    string `json:"value"`
+}
+
+type Series struct {
+	Ticker     string            `json:"ticker"`
+	Dimensions []SeriesDimension `json:"dimensions"`
+	Values     []Observation     `json:"values"`
+}
+
+type SeriesListResponse struct {
+	Data []Series `json:"data"`
+	Meta Meta     `json:"meta"`
+}
+
+type SeriesResponse struct {
+	Data Series `json:"data"`
+	Meta Meta   `json:"meta"`
 }
