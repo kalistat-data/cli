@@ -48,10 +48,7 @@ func Get() (Entry, error) {
 
 func GetToken() (string, error) {
 	entry, err := Get()
-	if err != nil {
-		return "", err
-	}
-	return entry.Token, nil
+	return entry.Token, err
 }
 
 func Clear() error {

@@ -4,13 +4,16 @@ Copyright © 2026 Kalistat
 package cmd
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
-	"github.com/kalistat-data/cli/internal/api"
 	"github.com/kalistat-data/cli/internal/keychain"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var authCmd = &cobra.Command{
@@ -19,11 +22,24 @@ var authCmd = &cobra.Command{
 }
 
 var authLoginCmd = &cobra.Command{
-	Use:   "login <token>",
+	Use:   "login",
 	Short: "Log in with an API token",
-	Args:  cobra.ExactArgs(1),
+	Long: `Log in with an API token.
+
+When stdin is a terminal, you are prompted and input is hidden.
+When stdin is a pipe, the first line is read as the token — useful for scripts:
+
+    echo "$KALISTAT_TOKEN" | kalistat auth login`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := keychain.SetToken(args[0]); err != nil {
+		token, err := readToken(cmd)
+		if err != nil {
+			return err
+		}
+		if token == "" {
+			return fmt.Errorf("no token provided")
+		}
+		if err := keychain.SetToken(token); err != nil {
 			return fmt.Errorf("failed to save token: %w", err)
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Logged in.")
@@ -45,7 +61,7 @@ var authStatusCmd = &cobra.Command{
 			return err
 		}
 
-		client, err := api.New()
+		client, err := apiClient()
 		if err != nil {
 			return err
 		}
@@ -78,6 +94,31 @@ var authLogoutCmd = &cobra.Command{
 	},
 }
 
+// readToken reads a token from the command's stdin. If stdin is a terminal
+// the input is hidden (no echo) and a prompt is printed to stderr; otherwise
+// a single line is read. This keeps tokens out of argv, /proc, and shell
+// history while still supporting piped, non-interactive usage.
+func readToken(cmd *cobra.Command) (string, error) {
+	in := cmd.InOrStdin()
+	if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		fmt.Fprint(cmd.ErrOrStderr(), "Enter API token: ")
+		b, err := term.ReadPassword(int(f.Fd()))
+		fmt.Fprintln(cmd.ErrOrStderr())
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(b)), nil
+	}
+	s := bufio.NewScanner(in)
+	if !s.Scan() {
+		if err := s.Err(); err != nil {
+			return "", err
+		}
+		return "", nil
+	}
+	return strings.TrimSpace(s.Text()), nil
+}
+
 func init() {
 	authCmd.AddCommand(authLoginCmd, authStatusCmd, authLogoutCmd)
 	rootCmd.AddCommand(authCmd)
@@ -88,10 +129,17 @@ func humanizeAge(d time.Duration) string {
 	case d < time.Minute:
 		return "just now"
 	case d < time.Hour:
-		return fmt.Sprintf("%d minutes", int(d.Minutes()))
+		return plural(int(d.Minutes()), "minute", "minutes")
 	case d < 24*time.Hour:
-		return fmt.Sprintf("%d hours", int(d.Hours()))
+		return plural(int(d.Hours()), "hour", "hours")
 	default:
-		return fmt.Sprintf("%d days", int(d.Hours()/24))
+		return plural(int(d.Hours()/24), "day", "days")
 	}
+}
+
+func plural(n int, singular, plural string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, singular)
+	}
+	return fmt.Sprintf("%d %s", n, plural)
 }

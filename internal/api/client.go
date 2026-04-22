@@ -4,14 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
-	"os"
+	"net/url"
+	"strings"
 	"time"
-
-	"github.com/kalistat-data/cli/internal/keychain"
 )
 
-const defaultBaseURL = "https://app.kalistat.com/api/v1"
+const (
+	DefaultBaseURL = "https://app.kalistat.com/api/v1"
+	maxBodyBytes   = 10 << 20 // 10 MiB
+)
 
 type Client struct {
 	BaseURL string
@@ -39,26 +42,55 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("HTTP %d", e.StatusCode)
 }
 
-func New() (*Client, error) {
-	token, err := keychain.GetToken()
-	if err != nil {
-		return nil, fmt.Errorf("no API token found — run `kalistat auth login <token>` first: %w", err)
+// NewWithToken constructs a Client with an explicit token and base URL.
+// An empty baseURL selects DefaultBaseURL. The base URL is validated:
+// scheme must be https, or http only when the host is a loopback address.
+func NewWithToken(token, baseURL string) (*Client, error) {
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
 	}
-	base := os.Getenv("KALISTAT_API_URL")
-	if base == "" {
-		base = defaultBaseURL
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Host == "" {
+		return nil, fmt.Errorf("invalid base URL %q", baseURL)
+	}
+	switch parsed.Scheme {
+	case "https":
+	case "http":
+		if !isLoopback(parsed.Host) {
+			return nil, fmt.Errorf("base URL %q must use https (http allowed only for loopback hosts)", baseURL)
+		}
+	default:
+		return nil, fmt.Errorf("base URL %q must use https or http", baseURL)
 	}
 	return &Client{
-		BaseURL: base,
+		BaseURL: strings.TrimRight(parsed.String(), "/"),
 		Token:   token,
 		HTTP:    &http.Client{Timeout: 30 * time.Second},
 	}, nil
 }
 
+func isLoopback(host string) bool {
+	h, _, err := net.SplitHostPort(host)
+	if err != nil {
+		h = host
+	}
+	if h == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(h); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
 // GetJSON performs a GET against path, decodes the body into out (if non-nil),
 // and returns the raw body. A non-2xx response becomes an *APIError.
 func (c *Client) GetJSON(path string, out any) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, c.BaseURL+path, nil)
+	target, err := url.JoinPath(c.BaseURL, path)
+	if err != nil {
+		return nil, fmt.Errorf("build URL: %w", err)
+	}
+	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +103,7 @@ func (c *Client) GetJSON(path string, out any) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {
 		return nil, err
 	}

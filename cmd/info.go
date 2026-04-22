@@ -18,7 +18,7 @@ var infoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Show CLI and API information",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := api.New()
+		client, err := apiClient()
 		if err != nil {
 			return err
 		}
@@ -28,8 +28,7 @@ var infoCmd = &cobra.Command{
 			return err
 		}
 
-		jsonMode, _ := cmd.Flags().GetBool("json")
-		if jsonMode {
+		if jsonOutput {
 			return writeRaw(cmd, body)
 		}
 		return printInfo(cmd, resp.Data)

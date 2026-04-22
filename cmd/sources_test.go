@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/kalistat-data/cli/internal/api"
-	"github.com/kalistat-data/cli/internal/keychain"
 )
 
 const sourcesResponseJSON = `{
@@ -21,40 +20,16 @@ const sourcesResponseJSON = `{
   "meta": {"generated_at":"2026-04-22T17:04:43.262974Z"}
 }`
 
-func setJSONFlag(t *testing.T, v bool) {
-	t.Helper()
-	if err := rootCmd.PersistentFlags().Set("json", strFor(v)); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = rootCmd.PersistentFlags().Set("json", "false") })
-}
-
-func strFor(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
-}
-
 func TestSources_PrettyByDefault(t *testing.T) {
-	buf := resetCmd(t)
-	if err := keychain.SetToken("secret"); err != nil {
-		t.Fatal(err)
-	}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(sourcesResponseJSON))
-	}))
-	defer server.Close()
-	t.Setenv("KALISTAT_API_URL", server.URL)
+	buf := loggedIn(t)
+	mockJSONAPI(t, sourcesResponseJSON, 0)
 
 	if err := runCLI(t, "sources"); err != nil {
 		t.Fatalf("sources: %v", err)
 	}
 
 	out := buf.String()
-	for _, want := range []string{"ID", "NAME", "istat", "ISTAT", "Italy", "eurostat", "—"} {
+	for _, want := range []string{"ID", "NAME", "istat", "ISTAT", "Italy", "eurostat", "—", "IT", "EU"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\n%s", want, out)
 		}
@@ -64,21 +39,51 @@ func TestSources_PrettyByDefault(t *testing.T) {
 	}
 }
 
-func TestSources_JSONFlagReturnsRaw(t *testing.T) {
-	buf := resetCmd(t)
-	if err := keychain.SetToken("secret"); err != nil {
-		t.Fatal(err)
-	}
-	setJSONFlag(t, true)
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(sourcesResponseJSON))
-	}))
-	defer server.Close()
-	t.Setenv("KALISTAT_API_URL", server.URL)
+// TestSources_PrettyColumnsAligned verifies tabwriter output actually aligns
+// columns, not just that the right substrings are present.
+func TestSources_PrettyColumnsAligned(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, sourcesResponseJSON, 0)
 
 	if err := runCLI(t, "sources"); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("want header + rows, got %d line(s): %s", len(lines), buf.String())
+	}
+	// Every row should have the value in the NAME column start at the same offset.
+	nameCol := regexp.MustCompile(`^\S+\s+`).FindStringIndex(lines[0])
+	if nameCol == nil {
+		t.Fatalf("can't find NAME column in %q", lines[0])
+	}
+	offset := nameCol[1]
+	for _, row := range lines[1:] {
+		cell := rune(row[offset-1])
+		if cell != ' ' {
+			t.Errorf("column break not aligned at offset %d in row %q", offset, row)
+		}
+	}
+}
+
+func TestSources_EmptyList(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, `{"data":[],"meta":{}}`, 0)
+
+	if err := runCLI(t, "sources"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "No sources available") {
+		t.Errorf("want empty-state message, got %q", buf.String())
+	}
+}
+
+func TestSources_JSONFlagReturnsRaw(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, sourcesResponseJSON, 0)
+
+	if err := runCLI(t, "sources", "--json"); err != nil {
 		t.Fatalf("sources --json: %v", err)
 	}
 
@@ -92,18 +97,11 @@ func TestSources_JSONFlagReturnsRaw(t *testing.T) {
 }
 
 func TestSources_UnauthorizedReturnsAPIError(t *testing.T) {
-	resetCmd(t)
-	if err := keychain.SetToken("bad"); err != nil {
-		t.Fatal(err)
-	}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"error":{"code":"unauthorized","message":"Missing or invalid Bearer token"}}`))
-	}))
-	defer server.Close()
-	t.Setenv("KALISTAT_API_URL", server.URL)
+	loggedIn(t)
+	mockJSONAPI(t,
+		`{"error":{"code":"unauthorized","message":"Missing or invalid Bearer token"}}`,
+		http.StatusUnauthorized,
+	)
 
 	err := runCLI(t, "sources")
 	if err == nil {

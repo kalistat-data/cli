@@ -15,7 +15,7 @@ var sourcesCmd = &cobra.Command{
 	Use:   "sources",
 	Short: "List available data sources",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := api.New()
+		client, err := apiClient()
 		if err != nil {
 			return err
 		}
@@ -25,8 +25,7 @@ var sourcesCmd = &cobra.Command{
 			return err
 		}
 
-		jsonMode, _ := cmd.Flags().GetBool("json")
-		if jsonMode {
+		if jsonOutput {
 			return writeRaw(cmd, body)
 		}
 		return printSources(cmd, resp.Data)
