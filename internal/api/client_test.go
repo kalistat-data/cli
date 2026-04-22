@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -62,6 +63,51 @@ func TestNewWithToken_EmptyBaseURLUsesDefault(t *testing.T) {
 	}
 	if !strings.HasPrefix(c.BaseURL, "https://") {
 		t.Errorf("default BaseURL should use https, got %q", c.BaseURL)
+	}
+}
+
+func TestGetJSON_ForwardsQueryParams(t *testing.T) {
+	var gotPath, gotQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotQuery = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	c, _ := NewWithToken("tok", server.URL)
+	q := url.Values{}
+	q.Set("q", "employment")
+	q.Set("page", "2")
+	q.Set("pattern", "A.*.TOT") // wildcard must be percent-encoded
+
+	if _, err := c.GetJSON("/search", q, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(gotPath, "/search") {
+		t.Errorf("path = %q, want to end with /search", gotPath)
+	}
+	for _, want := range []string{"q=employment", "page=2", "pattern=A.%2A.TOT"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+func TestGetJSON_NilQueryProducesNoQueryString(t *testing.T) {
+	var gotQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	c, _ := NewWithToken("tok", server.URL)
+	if _, err := c.GetJSON("/sources", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if gotQuery != "" {
+		t.Errorf("nil query should produce no RawQuery, got %q", gotQuery)
 	}
 }
 

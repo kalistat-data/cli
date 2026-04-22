@@ -20,6 +20,7 @@ func resetCmd(t *testing.T) *bytes.Buffer {
 	keyring.MockInit()
 	jsonOutput = false
 	baseURL = ""
+	resetSearchFlags()
 
 	buf := &bytes.Buffer{}
 	rootCmd.SetOut(buf)
@@ -32,6 +33,7 @@ func resetCmd(t *testing.T) *bytes.Buffer {
 		rootCmd.SetArgs(nil)
 		jsonOutput = false
 		baseURL = ""
+		resetSearchFlags()
 	})
 	return buf
 }

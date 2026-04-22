@@ -21,6 +21,18 @@ var (
 	searchPageSize    int
 )
 
+// resetSearchFlags is used by tests (via resetCmd) to guarantee that flag
+// values set by one test don't leak into the next. Flag-bound package vars
+// are only overwritten when cobra parses the flag on the command line, so a
+// test that omits e.g. --page after another test set it would otherwise see
+// the stale value.
+func resetSearchFlags() {
+	searchSource = ""
+	searchCategoryKey = ""
+	searchPage = 0
+	searchPageSize = 0
+}
+
 var searchCmd = &cobra.Command{
 	Use:   "search <query>",
 	Short: "Search datasets (weighted full-text)",
@@ -73,7 +85,7 @@ func printSearch(cmd *cobra.Command, resp *api.SearchResponse) error {
 	if p := resp.Meta.Pagination; p != nil {
 		start := (p.Page-1)*p.PageSize + 1
 		end := start + len(resp.Data) - 1
-		fmt.Fprintf(out, "Showing %d-%d of %d match%s.\n\n", start, end, p.Total, pluralSuffix(p.Total, "", "es"))
+		fmt.Fprintf(out, "Showing %d-%d of %s.\n\n", start, end, plural(p.Total, "match", "matches"))
 	}
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "CODE\tNAME\tSOURCE\tCATEGORY\tCATEGORY KEY")
@@ -95,13 +107,6 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return strings.TrimSpace(s[:n-1]) + "…"
-}
-
-func pluralSuffix(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
 }
 
 func init() {

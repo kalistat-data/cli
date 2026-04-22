@@ -3,9 +3,12 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/kalistat-data/cli/internal/api"
 )
 
 const seriesListResponseJSON = `{
@@ -186,5 +189,113 @@ func TestSeriesList_RequiresBothArgs(t *testing.T) {
 
 	if err := runCLI(t, "series", "list", "only-dataset"); err == nil {
 		t.Fatal("expected error when pattern arg is missing")
+	}
+}
+
+func TestSeriesGet_JSONPassthrough(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, seriesGetResponseJSON, 0)
+
+	if err := runCLI(t, "series", "get", "IT.LAMA.132", "M.IT.EMP.Y.9.Y15-24.9.9.CURRENT", "--json"); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &got); err != nil {
+		t.Fatalf("not valid JSON: %v\n%s", err, buf.String())
+	}
+	if _, ok := got["data"]; !ok {
+		t.Errorf("missing 'data' key")
+	}
+}
+
+func TestSeriesList_APIErrorSurfacesCleanly(t *testing.T) {
+	loggedIn(t)
+	mockJSONAPI(t,
+		`{"error":{"code":"dataset_not_found","message":"dataset not found"}}`,
+		http.StatusNotFound,
+	)
+
+	err := runCLI(t, "series", "list", "UNKNOWN", "A.*.B")
+	var apiErr *api.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %T %v, want *APIError", err, err)
+	}
+	if apiErr.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d", apiErr.StatusCode)
+	}
+}
+
+func TestSeriesGet_APIErrorSurfacesCleanly(t *testing.T) {
+	loggedIn(t)
+	mockJSONAPI(t,
+		`{"error":{"code":"not_found","message":"series not found"}}`,
+		http.StatusNotFound,
+	)
+
+	err := runCLI(t, "series", "get", "IT.LAMA.132", "BOGUS.CODE")
+	var apiErr *api.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %T %v, want *APIError", err, err)
+	}
+	if apiErr.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d", apiErr.StatusCode)
+	}
+}
+
+func TestSeriesList_NotLoggedInReturnsError(t *testing.T) {
+	resetCmd(t)
+
+	err := runCLI(t, "series", "list", "IT.LAMA.132", "A.*.B")
+	if err == nil {
+		t.Fatal("expected error when not logged in")
+	}
+	if !strings.Contains(err.Error(), "no API token") {
+		t.Errorf("error = %q, want to mention missing token", err)
+	}
+}
+
+func TestSeriesGet_NotLoggedInReturnsError(t *testing.T) {
+	resetCmd(t)
+
+	err := runCLI(t, "series", "get", "IT.LAMA.132", "A.IT.TOT")
+	if err == nil {
+		t.Fatal("expected error when not logged in")
+	}
+}
+
+// TestSeries_RejectsPathTraversal covers the security fix: url.PathEscape
+// does not encode `.` or `..`, and url.URL.JoinPath then runs path.Clean,
+// which would silently redirect requests to unintended endpoints. Both
+// subcommands must reject such inputs before constructing the URL.
+func TestSeries_RejectsPathTraversal(t *testing.T) {
+	// Fail the test if any request reaches the server — validation must
+	// happen client-side before the HTTP call.
+	mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("API should not be called for invalid segments; got %s %s", r.Method, r.URL)
+	})
+
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"list: dataset is ..", []string{"series", "list", "..", "A.B"}},
+		{"list: dataset is .", []string{"series", "list", ".", "A.B"}},
+		{"list: dataset has slash", []string{"series", "list", "a/b", "A.B"}},
+		{"get: dataset is ..", []string{"series", "get", "..", "A.B"}},
+		{"get: serie-code is ..", []string{"series", "get", "IT.LAMA.132", ".."}},
+		{"get: serie-code has slash", []string{"series", "get", "IT.LAMA.132", "A/B"}},
+		{"get: dataset empty", []string{"series", "get", "", "A.B"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			loggedIn(t)
+			err := runCLI(t, c.args...)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !strings.Contains(err.Error(), "invalid characters") {
+				t.Errorf("error = %q, want to mention invalid characters", err)
+			}
+		})
 	}
 }

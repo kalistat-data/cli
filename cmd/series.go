@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"text/tabwriter"
@@ -13,6 +14,19 @@ import (
 	"github.com/kalistat-data/cli/internal/api"
 	"github.com/spf13/cobra"
 )
+
+// validPathSegment matches identifiers used as URL path segments for dataset
+// codes and series codes. It deliberately forbids `.`/`..` and slashes so a
+// user-supplied value can't walk the URL path after url.URL.JoinPath runs
+// path.Clean on the constructed URL.
+var validPathSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+func validateSegment(name, value string) error {
+	if !validPathSegment.MatchString(value) {
+		return fmt.Errorf("%s %q contains invalid characters (allowed: letters, digits, '.', '-', '_'; must not be empty or start with a symbol)", name, value)
+	}
+	return nil
+}
 
 var seriesCmd = &cobra.Command{
 	Use:   "series",
@@ -30,6 +44,9 @@ to fetch the observations for one of them.`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dataset, pattern := args[0], args[1]
+		if err := validateSegment("dataset", dataset); err != nil {
+			return err
+		}
 		client, err := apiClient()
 		if err != nil {
 			return err
@@ -54,6 +71,12 @@ var seriesGetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dataset, serieCode := args[0], args[1]
+		if err := validateSegment("dataset", dataset); err != nil {
+			return err
+		}
+		if err := validateSegment("series code", serieCode); err != nil {
+			return err
+		}
 		client, err := apiClient()
 		if err != nil {
 			return err
