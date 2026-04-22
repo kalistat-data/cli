@@ -107,6 +107,48 @@ kalistat sources
 kalistat sources --json
 ```
 
+### `kalistat search`
+
+Full-text search across datasets. The query is required; optional flags narrow the result set and paginate. The pretty output includes the `CATEGORY KEY` column so you can copy a key and use it to filter a subsequent search.
+
+```bash
+kalistat search employment
+kalistat search employment --source istat
+kalistat search labour --category-key EU.5.2.1
+kalistat search employment --page 2 --page-size 20
+kalistat search employment --json
+```
+
+Flags:
+
+- `--source istat|eurostat` — restrict to one source
+- `--category-key KEY` — restrict to a category subtree (use a key printed in the `CATEGORY KEY` column)
+- `--page N`, `--page-size N` — paginate (page size max 200)
+
+### `kalistat series`
+
+Resolve and fetch time series from a dataset. Two subcommands:
+
+`series list <dataset> <pattern>` — resolve a wildcarded ticker pattern into concrete series. Use `*` as a wildcard in any dimension position.
+
+```bash
+kalistat series list IT.LAMA.132 'M.IT.EMP.Y.9.*.9.9.CURRENT'
+# → one row per matched ticker, with observation count and time range
+```
+
+`series get <dataset> <series-code>` — fetch a single series. Output shows the ticker, a legend of dimension values, and a `TIME / VALUE` table for every observation. Null observations render as `—`.
+
+```bash
+kalistat series get IT.LAMA.132 M.IT.EMP.Y.9.Y15-24.9.9.CURRENT
+kalistat series get IT.LAMA.132 M.IT.EMP.Y.9.Y15-24.9.9.CURRENT --json | jq '.data.values[-1]'
+```
+
+For large series, pipe to standard tools:
+
+```bash
+kalistat series get IT.LAMA.132 M.IT.EMP.Y.9.Y15-24.9.9.CURRENT | tail -20
+```
+
 ### `kalistat auth`
 
 Authentication commands.
@@ -125,13 +167,14 @@ The CLI uses the production API by default:
 https://app.kalistat.com/api/v1
 ```
 
-Override it with an environment variable:
+Override it with the `--base-url` flag (takes precedence) or the `KALISTAT_API_URL` environment variable:
 
 ```bash
-export KALISTAT_API_URL=https://app.kalistat.com/api/v1
+kalistat --base-url https://staging.kalistat.com/api/v1 sources
+export KALISTAT_API_URL=https://staging.kalistat.com/api/v1
 ```
 
-This is useful for local development or testing against another environment.
+The flag beats the env var; the env var beats the default. Only `https` URLs are accepted, except for loopback hosts (`localhost`, `127.0.0.1`, `[::1]`) for local development.
 
 ## Output
 
@@ -189,13 +232,15 @@ go test ./...
 This is an early version of the CLI.
 
 Current focus:
-- authentication
-- API info
-- sources
+- authentication (`auth login/status/logout`)
+- API info (`info`)
+- sources (`sources`)
+- full-text search (`search`)
+- time series (`series list`, `series get`)
 
 Planned next:
-- more endpoint coverage
-- richer output formatting
+- more endpoint coverage (categories, datasets detail, batch series)
+- CSV output alongside JSON
 - shell completion
 - release packaging
 
