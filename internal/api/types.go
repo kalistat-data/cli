@@ -133,3 +133,48 @@ type DimensionValuesResponse struct {
 	Data []DimensionValue `json:"data"`
 	Meta Meta             `json:"meta"`
 }
+
+type Category struct {
+	Key         string            `json:"key"`
+	Name        string            `json:"name"`
+	Source      string            `json:"source"`
+	HasChildren bool              `json:"has_children"`
+	HasDatasets bool              `json:"has_datasets"`
+	Children    []Category        `json:"children,omitempty"`
+	Datasets    []DatasetStub     `json:"datasets,omitempty"`
+	Links       map[string]string `json:"links,omitempty"`
+}
+
+type CategoriesListResponse struct {
+	Data []Category `json:"data"`
+	Meta Meta       `json:"meta"`
+}
+
+type CategoryResponse struct {
+	Data Category `json:"data"`
+	Meta Meta     `json:"meta"`
+}
+
+type Ancestor struct {
+	Key   string `json:"key"`
+	Name  string `json:"name"`
+	Depth int    `json:"depth"`
+}
+
+type AncestorsResponse struct {
+	Data []Ancestor `json:"data"`
+	Meta Meta       `json:"meta"`
+}
+
+type DatasetStub struct {
+	Code        string            `json:"code"`
+	Name        string            `json:"name"`
+	Source      string            `json:"source"`
+	CategoryKey string            `json:"category_key,omitempty"`
+	Links       map[string]string `json:"links,omitempty"`
+}
+
+type CategoryDatasetsResponse struct {
+	Data []DatasetStub `json:"data"`
+	Meta Meta          `json:"meta"`
+}

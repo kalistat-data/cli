@@ -125,6 +125,47 @@ Flags:
 - `--category-key KEY` — restrict to a category subtree (use a key printed in the `CATEGORY KEY` column)
 - `--page N`, `--page-size N` — paginate (page size max 200)
 
+### `kalistat category`
+
+Navigate the hierarchical category tree. Four subcommands.
+
+`category tree [<key>]` — render a visual tree. With no key, shows both sources' roots. With a key, shows the subtree rooted there. `--depth` controls how deep (1-5, default 2). `--with-datasets` embeds dataset stubs under their category. `--source istat|eurostat` filters roots when no key is given. `--ascii` switches box-drawing characters to ASCII for terminals that don't render Unicode cleanly.
+
+```bash
+kalistat category tree                           # both roots, depth 2
+kalistat category tree --source istat            # ISTAT roots only
+kalistat category tree IT.5 --depth 3            # Labor market, 3 levels deep
+kalistat category tree IT.5.2.1 --with-datasets  # leaf category + its datasets
+kalistat category tree IT.5 --ascii              # ASCII connectors (|--, `--)
+```
+
+A node with unexplored descendants (the depth cap truncated the view) is marked with `…` after its name.
+
+`category get <key>` — one node and its direct children as a detail view.
+
+```bash
+kalistat category get IT.5
+```
+
+`category ancestors <key>` — breadcrumb trail from root to the node, with the target flagged `>`.
+
+```bash
+kalistat category ancestors IT.5.2.1
+#   IT  Italy
+#     IT.5  Labor market
+#       IT.5.2  Employment
+#       > IT.5.2.1  Employed - monthly data
+```
+
+`category datasets <key>` — paginated list of datasets attached to a category. `--recursive` walks descendants.
+
+```bash
+kalistat category datasets IT.5.2.1
+kalistat category datasets IT.5 --recursive --page-size 10
+```
+
+Typical navigation: `category tree` → `category tree <key>` → `category datasets <key>` → `dataset get <code>` → `series list <code> '<pattern>'` → `series get <code> <series-code>`.
+
 ### `kalistat dataset`
 
 Inspect dataset metadata and dimension values. Two subcommands:
@@ -256,6 +297,7 @@ Current focus:
 - API info (`info`)
 - sources (`sources`)
 - full-text search (`search`)
+- categories (`category tree`, `category get`, `category ancestors`, `category datasets`)
 - datasets (`dataset get`, `dataset values`)
 - time series (`series list`, `series get`)
 

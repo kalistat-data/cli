@@ -21,6 +21,7 @@ func resetCmd(t *testing.T) *bytes.Buffer {
 	jsonOutput = false
 	baseURL = ""
 	resetSearchFlags()
+	resetCategoryFlags()
 
 	buf := &bytes.Buffer{}
 	rootCmd.SetOut(buf)
@@ -34,6 +35,7 @@ func resetCmd(t *testing.T) *bytes.Buffer {
 		jsonOutput = false
 		baseURL = ""
 		resetSearchFlags()
+		resetCategoryFlags()
 	})
 	return buf
 }
