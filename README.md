@@ -248,6 +248,16 @@ kalistat info --json
 kalistat sources --json
 ```
 
+## Using with AI assistants
+
+An Agent Skill that teaches AI assistants how to drive this CLI lives at [`skills/kalistat/SKILL.md`](skills/kalistat/SKILL.md).
+
+- **Claude Code** — clone this repo; the skill is auto-discovered from `skills/kalistat/SKILL.md` when you work in the repo.
+- **Claude.ai Projects** — paste the contents of [`skills/kalistat/AGENTS.md`](skills/kalistat/AGENTS.md) into your project's custom instructions.
+- **ChatGPT / Cursor / other assistants** — paste [`skills/kalistat/AGENTS.md`](skills/kalistat/AGENTS.md) as a system prompt or rules file.
+
+Edit `SKILL.md` (the source of truth), then run `./skills/kalistat/sync.sh` to regenerate `AGENTS.md`.
+
 ## Development
 
 Run the CLI locally:
@@ -280,6 +290,7 @@ go test ./...
 .
 ├── cmd
 ├── internal
+├── skills
 ├── go.mod
 ├── go.sum
 └── main.go
@@ -287,6 +298,7 @@ go test ./...
 
 - `cmd/` contains Cobra commands
 - `internal/` contains API, keychain, and supporting logic
+- `skills/` contains Agent Skills that teach AI assistants how to use the CLI
 
 ## Status
 
