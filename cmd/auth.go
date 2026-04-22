@@ -49,10 +49,9 @@ var authStatusCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		var resp any
-		if err := client.GetJSON("/", &resp); err != nil {
+		if _, err := client.GetJSON("/", nil); err != nil {
 			fmt.Fprintln(out, "Logged in, but token is not valid.")
-			return err
+			return errSilent
 		}
 
 		fmt.Fprintln(out, "Logged in.")

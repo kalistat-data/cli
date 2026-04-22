@@ -4,36 +4,67 @@ Copyright © 2026 Kalistat
 package cmd
 
 import (
+	"bytes"
 	"fmt"
+	"strings"
 
+	"github.com/kalistat-data/cli/internal/api"
 	"github.com/spf13/cobra"
 )
 
-// infoCmd represents the info command
+const cliVersion = "v1"
+
 var infoCmd = &cobra.Command{
 	Use:   "info",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "Show CLI and API information",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client, err := api.New()
+		if err != nil {
+			return err
+		}
+		var resp api.RootResponse
+		body, err := client.GetJSON("/", &resp)
+		if err != nil {
+			return err
+		}
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("info called")
+		jsonMode, _ := cmd.Flags().GetBool("json")
+		if jsonMode {
+			return writeRaw(cmd, body)
+		}
+		return printInfo(cmd, resp.Data)
 	},
+}
+
+func printInfo(cmd *cobra.Command, r api.Root) error {
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Kalistat CLI %s\n", cliVersion)
+	if r.Version != "" {
+		fmt.Fprintf(out, "  Using API %s\n", r.Version)
+	}
+	if len(r.Sources) > 0 {
+		fmt.Fprintf(out, "  Sources:    %s\n", strings.Join(r.Sources, ", "))
+	}
+	if r.RateLimit.RequestsPerMinute > 0 {
+		fmt.Fprintf(out, "  Rate limit: %d requests/minute\n", r.RateLimit.RequestsPerMinute)
+	}
+	return nil
+}
+
+// writeRaw copies the server's JSON body verbatim to the command's stdout,
+// adding a trailing newline if the body doesn't already have one.
+func writeRaw(cmd *cobra.Command, body []byte) error {
+	out := cmd.OutOrStdout()
+	if _, err := out.Write(body); err != nil {
+		return err
+	}
+	if !bytes.HasSuffix(body, []byte("\n")) {
+		_, err := fmt.Fprintln(out)
+		return err
+	}
+	return nil
 }
 
 func init() {
 	rootCmd.AddCommand(infoCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// infoCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// infoCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
