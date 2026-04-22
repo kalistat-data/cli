@@ -93,3 +93,43 @@ type SeriesResponse struct {
 	Data Series `json:"data"`
 	Meta Meta   `json:"meta"`
 }
+
+type Dimension struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Position int    `json:"position"`
+}
+
+type TimeDimension struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Position int    `json:"position"`
+}
+
+type Dataset struct {
+	Code           string            `json:"code"`
+	Name           string            `json:"name"`
+	Source         string            `json:"source"`
+	DataflowID     string            `json:"dataflow_id"`
+	CategoryKey    string            `json:"category_key,omitempty"`
+	SeriesCount    int               `json:"series_count,omitempty"`
+	Dimensions     []Dimension       `json:"dimensions"`
+	TimeDimensions []TimeDimension   `json:"time_dimensions"`
+	Links          map[string]string `json:"links"`
+}
+
+type DatasetResponse struct {
+	Data Dataset `json:"data"`
+	Meta Meta    `json:"meta"`
+}
+
+type DimensionValue struct {
+	Code  string `json:"code"`
+	Name  string `json:"name"`
+	Level int    `json:"level"`
+}
+
+type DimensionValuesResponse struct {
+	Data []DimensionValue `json:"data"`
+	Meta Meta             `json:"meta"`
+}

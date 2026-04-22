@@ -125,6 +125,26 @@ Flags:
 - `--category-key KEY` — restrict to a category subtree (use a key printed in the `CATEGORY KEY` column)
 - `--page N`, `--page-size N` — paginate (page size max 200)
 
+### `kalistat dataset`
+
+Inspect dataset metadata and dimension values. Two subcommands:
+
+`dataset get <code>` — metadata for a single dataset. Output shows source, dataflow ID, category key, series count, and a sorted table of dimensions (plus time dimensions). Use this to discover the dimension **keys** you'll need for `series list` patterns or `dataset values`.
+
+```bash
+kalistat dataset get IT.LAMA.132
+kalistat dataset get IT.LAMA.132 --json
+```
+
+`dataset values <code> <dim-key>` — allowed values for one dimension, in the same order the filter panel shows. Output is a `CODE / NAME` table (plus a `LEVEL` column when the codelist is hierarchical).
+
+```bash
+kalistat dataset values IT.LAMA.132 AGE
+kalistat dataset values IT.LAMA.132 REF_AREA --json | jq '.data[].code'
+```
+
+Typical discovery workflow: `search` → `dataset get` → `dataset values` → `series list`.
+
 ### `kalistat series`
 
 Resolve and fetch time series from a dataset. Two subcommands:
@@ -236,6 +256,7 @@ Current focus:
 - API info (`info`)
 - sources (`sources`)
 - full-text search (`search`)
+- datasets (`dataset get`, `dataset values`)
 - time series (`series list`, `series get`)
 
 Planned next:

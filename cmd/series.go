@@ -6,7 +6,6 @@ package cmd
 import (
 	"fmt"
 	"net/url"
-	"regexp"
 	"sort"
 	"strconv"
 	"text/tabwriter"
@@ -14,19 +13,6 @@ import (
 	"github.com/kalistat-data/cli/internal/api"
 	"github.com/spf13/cobra"
 )
-
-// validPathSegment matches identifiers used as URL path segments for dataset
-// codes and series codes. It deliberately forbids `.`/`..` and slashes so a
-// user-supplied value can't walk the URL path after url.URL.JoinPath runs
-// path.Clean on the constructed URL.
-var validPathSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
-
-func validateSegment(name, value string) error {
-	if !validPathSegment.MatchString(value) {
-		return fmt.Errorf("%s %q contains invalid characters (allowed: letters, digits, '.', '-', '_'; must not be empty or start with a symbol)", name, value)
-	}
-	return nil
-}
 
 var seriesCmd = &cobra.Command{
 	Use:   "series",

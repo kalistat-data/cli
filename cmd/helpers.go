@@ -6,10 +6,24 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	"github.com/kalistat-data/cli/internal/api"
 	"github.com/kalistat-data/cli/internal/keychain"
 )
+
+// validPathSegment matches identifiers used as URL path segments (dataset
+// codes, series codes, dimension keys). It deliberately forbids `.`/`..`
+// and slashes so a user-supplied value can't walk the URL path after
+// url.URL.JoinPath runs path.Clean on the constructed URL.
+var validPathSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+func validateSegment(name, value string) error {
+	if !validPathSegment.MatchString(value) {
+		return fmt.Errorf("%s %q contains invalid characters (allowed: letters, digits, '.', '-', '_'; must not be empty or start with a symbol)", name, value)
+	}
+	return nil
+}
 
 // resolveBaseURL picks the effective API base URL. Precedence: --base-url
 // flag > KALISTAT_API_URL env var > api.DefaultBaseURL (selected by
