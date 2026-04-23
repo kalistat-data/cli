@@ -13,6 +13,18 @@ import (
 
 const cliVersion = "v1"
 
+const kalistatLogo = `    ⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⣷⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⢸⣯⣿⣿⣽⣿⣯⣿⣿⠀⠀⠀⠀⠀⠀
+    ⠀⢀⠀⣀⣀⠌⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⢀⡀⠀
+    ⣛⣯⣟⣯⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢐⣿⣿⣿⣿
+    ⡜⡶⣽⢺⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢈⣿⣿⣟⣿
+    ⢜⡳⣭⢻⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢈⣿⣿⢿⣿
+    ⢌⡳⢭⣛⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢨⣿⣿⡿⡿
+    ⠀⠀⠀⠀⠀⠀⠀⢀⠀⡀⢀⠀⣀⣀⠔⠉⠀⠀⠈⠀
+    ⠀⠀⠀⠀⠀⢠⢻⢭⡻⣝⢯⠿⣝⣿⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⢏⢮⠵⣫⢞⣯⢻⡼⠀⠀⠀⠀⠀⠀
+`
+
 var infoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Show CLI and API information",
@@ -37,7 +49,8 @@ var infoCmd = &cobra.Command{
 
 func printInfo(cmd *cobra.Command, r api.Root) error {
 	out := cmd.OutOrStdout()
-	fmt.Fprintf(out, "Kalistat CLI %s\n", cliVersion)
+	fmt.Fprintf(out, "\n%s\n", kalistatLogo)
+	fmt.Fprintf(out, "Kalistat CLI %s\n\n", cliVersion)
 	if r.Version != "" {
 		fmt.Fprintf(out, "  Using API %s\n", r.Version)
 	}
