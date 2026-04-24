@@ -21,7 +21,7 @@ import (
 // and the t.Cleanup block. Cobra never re-zeroes flag-bound package vars
 // when the flag is absent on the command line, so one test setting
 // --page=3 would silently change the default for every later test.
-// Current participants: resetSearchFlags, resetCategoryFlags.
+// Current participants: resetSearchFlags, resetCategoryFlags, resetChartFlags.
 func resetCmd(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	keyring.MockInit()
@@ -29,6 +29,7 @@ func resetCmd(t *testing.T) *bytes.Buffer {
 	baseURL = ""
 	resetSearchFlags()
 	resetCategoryFlags()
+	resetChartFlags()
 
 	buf := &bytes.Buffer{}
 	rootCmd.SetOut(buf)
@@ -43,6 +44,7 @@ func resetCmd(t *testing.T) *bytes.Buffer {
 		baseURL = ""
 		resetSearchFlags()
 		resetCategoryFlags()
+		resetChartFlags()
 	})
 	return buf
 }

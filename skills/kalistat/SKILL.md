@@ -18,8 +18,9 @@ The `kalistat` CLI queries ISTAT and Eurostat statistical data through the Kalis
     kalistat category datasets <KEY>               # datasets in the leaf
     kalistat dataset get <CODE>                    # dimensions (+ FIXED VALUE column)
     kalistat dataset values <CODE> <DIM>           # allowed codes for one dimension
-    kalistat series list <CODE> '<pattern>'        # resolve tickers (* = wildcard)
-    kalistat series get  <CODE> <TICKER>           # fetch observations
+    kalistat series list  <CODE> '<pattern>'       # resolve tickers (* = wildcard)
+    kalistat series get   <CODE> <TICKER>          # fetch observations
+    kalistat series chart <CODE> <TICKER>          # ASCII line chart (human-only)
     ```
   - *Only keywords*: `kalistat search "<query>" --source istat|eurostat`, then continue as above.
 - **Pattern building** — before writing a `series list` pattern:
@@ -105,12 +106,14 @@ kalistat dataset values IT.LAMA.132 REF_AREA --json | jq '.data[].code'
   - Hard cap: 500 series per pattern. Beyond that, the server returns the first 500 and the CLI prints a `Warning: results truncated to first 500 matches` banner (JSON: `meta.warning.code = "result_truncated"`). Narrow the pattern.
   - No pagination here — `--page` / `--page-size` are not accepted.
 - `kalistat series get <CODE> <TICKER>` — fetch observations for one series. Null values render as `—` in plain mode, `null` in JSON.
+- `kalistat series chart <CODE> <TICKER>` — render the series as a braille line chart in the terminal. Intended for human use; the output is ANSI-decorated and not machine-parseable. Use `--width` / `--height` to resize, or `--json` to fall back to `series get`'s raw JSON. X-axis labels match the series' `FREQ` (annual, quarterly, monthly, daily).
 
 Example:
 ```
-kalistat series list IT.LAMA.132 'M.IT.EMP.Y.9.*.9.9.CURRENT'
-kalistat series get  IT.LAMA.132 M.IT.EMP.Y.9.Y15-24.9.9.CURRENT
-kalistat series get  IT.LAMA.132 M.IT.EMP.Y.9.Y15-24.9.9.CURRENT --json | jq '.data.values[-1]'
+kalistat series list  IT.LAMA.132 'M.IT.EMP.Y.9.*.9.9.CURRENT'
+kalistat series get   IT.LAMA.132 M.IT.EMP.Y.9.Y15-24.9.9.CURRENT
+kalistat series get   IT.LAMA.132 M.IT.EMP.Y.9.Y15-24.9.9.CURRENT --json | jq '.data.values[-1]'
+kalistat series chart IT.LAMA.201 M.IT.UNEM_R.N.9.Y15-74.2025M6G3
 ```
 
 **Recovering from "No matching series found"**: the pattern is syntactically valid but no realized series matches — usually one dimension's code is wrong, not the whole pattern. Widen one dimension at a time to `*` until results appear; the one you had to widen holds the bad code. Re-check it with `dataset values` (and watch for cross-dataset code conventions — see Gotchas).

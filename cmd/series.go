@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"sort"
 	"strconv"
@@ -108,6 +109,25 @@ func printSeriesList(cmd *cobra.Command, pattern string, resp *api.SeriesListRes
 
 func printSeriesGet(cmd *cobra.Command, s *api.Series) error {
 	out := cmd.OutOrStdout()
+	if err := printSeriesHeader(out, s); err != nil {
+		return err
+	}
+	if len(s.Values) == 0 {
+		return nil
+	}
+	fmt.Fprintln(out)
+	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "TIME\tVALUE")
+	for _, obs := range s.Values {
+		fmt.Fprintf(tw, "%s\t%s\n", obs.Time, formatValue(obs.Value))
+	}
+	return tw.Flush()
+}
+
+// printSeriesHeader writes the ticker, sorted dimensions, and observation
+// count/range lines. Shared by `series get` and `series chart` so both
+// commands present the same context before their payload.
+func printSeriesHeader(out io.Writer, s *api.Series) error {
 	fmt.Fprintf(out, "Ticker: %s\n", s.Ticker)
 	if len(s.Dimensions) > 0 {
 		fmt.Fprintln(out, "Dimensions:")
@@ -128,16 +148,7 @@ func printSeriesGet(cmd *cobra.Command, s *api.Series) error {
 		fmt.Fprintf(out, " (%s)", rangeString(from, to))
 	}
 	fmt.Fprintln(out)
-	if len(s.Values) == 0 {
-		return nil
-	}
-	fmt.Fprintln(out)
-	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "TIME\tVALUE")
-	for _, obs := range s.Values {
-		fmt.Fprintf(tw, "%s\t%s\n", obs.Time, formatValue(obs.Value))
-	}
-	return tw.Flush()
+	return nil
 }
 
 func observationRange(obs []api.Observation) (from, to string) {
