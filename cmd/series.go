@@ -83,7 +83,16 @@ var seriesGetCmd = &cobra.Command{
 func printSeriesList(cmd *cobra.Command, pattern string, resp *api.SeriesListResponse) error {
 	out := cmd.OutOrStdout()
 	fmt.Fprintf(out, "Pattern: %s\n", sanitizeForTerminal(pattern))
-	fmt.Fprintf(out, "Matched: %d series\n\n", len(resp.Data))
+	fmt.Fprintf(out, "Matched: %d series\n", len(resp.Data))
+	if w := resp.Meta.Warning; w != nil {
+		limit := w.Limit
+		if limit == 0 {
+			limit = len(resp.Data)
+		}
+		fmt.Fprintf(out, "Warning: results truncated to first %d matches — narrow the pattern to see more. (%s)\n",
+			limit, sanitizeForTerminal(w.Code))
+	}
+	fmt.Fprintln(out)
 	if len(resp.Data) == 0 {
 		return nil
 	}

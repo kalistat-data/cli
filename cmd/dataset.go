@@ -44,6 +44,35 @@ var datasetGetCmd = &cobra.Command{
 	},
 }
 
+var datasetAncestorsCmd = &cobra.Command{
+	Use:   "ancestors <code>",
+	Short: "Print the breadcrumb trail from root to the dataset's parent category",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		code := args[0]
+		if err := validateSegment("dataset", code); err != nil {
+			return err
+		}
+		client, err := apiClient()
+		if err != nil {
+			return err
+		}
+		var resp api.AncestorsResponse
+		body, err := client.GetJSON("/datasets/"+url.PathEscape(code)+"/ancestors", nil, &resp)
+		if err != nil {
+			return err
+		}
+		if jsonOutput {
+			return writeRaw(cmd, body)
+		}
+		g := unicodeGlyphs
+		if treeASCII {
+			g = asciiGlyphs
+		}
+		return printAncestors(cmd.OutOrStdout(), resp.Data, g)
+	},
+}
+
 var datasetValuesCmd = &cobra.Command{
 	Use:   "values <code> <dim-key>",
 	Short: "List allowed values for a dimension",
@@ -98,6 +127,11 @@ func printDataset(cmd *cobra.Command, d *api.Dataset) error {
 
 // printDimensionTable renders a titled, position-sorted table of dimensions.
 // No-op when dims is empty, so callers don't need to guard the call.
+//
+// If any dimension carries a FixedValue the table grows a FIXED VALUE column
+// so users can tell at a glance which dimensions are pinned to a single code
+// (and therefore need no wildcard in `series list` patterns). When no
+// dimension is pinned the 3-column layout is preserved byte-for-byte.
 func printDimensionTable(out io.Writer, title string, dims []api.Dimension) error {
 	if len(dims) == 0 {
 		return nil
@@ -105,12 +139,31 @@ func printDimensionTable(out io.Writer, title string, dims []api.Dimension) erro
 	sorted := append([]api.Dimension(nil), dims...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Position < sorted[j].Position })
 
+	hasFixed := false
+	for _, d := range sorted {
+		if d.FixedValue != nil {
+			hasFixed = true
+			break
+		}
+	}
+
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, title)
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "  POS\tKEY\tLABEL")
-	for _, d := range sorted {
-		fmt.Fprintf(tw, "  %d\t%s\t%s\n", d.Position, d.Key, d.Label)
+	if hasFixed {
+		fmt.Fprintln(tw, "  POS\tKEY\tLABEL\tFIXED VALUE")
+		for _, d := range sorted {
+			fv := ""
+			if d.FixedValue != nil {
+				fv = fmt.Sprintf("%s (%s)", d.FixedValue.Code, d.FixedValue.Name)
+			}
+			fmt.Fprintf(tw, "  %d\t%s\t%s\t%s\n", d.Position, d.Key, d.Label, fv)
+		}
+	} else {
+		fmt.Fprintln(tw, "  POS\tKEY\tLABEL")
+		for _, d := range sorted {
+			fmt.Fprintf(tw, "  %d\t%s\t%s\n", d.Position, d.Key, d.Label)
+		}
 	}
 	return tw.Flush()
 }
@@ -148,6 +201,11 @@ func printDimensionValues(cmd *cobra.Command, dimKey string, values []api.Dimens
 }
 
 func init() {
-	datasetCmd.AddCommand(datasetGetCmd, datasetValuesCmd)
+	// --ascii shares the same package-level var as `category tree` / `category
+	// ancestors`. Cobra only parses one subcommand per invocation so there's
+	// no risk of cross-contamination.
+	datasetAncestorsCmd.Flags().BoolVar(&treeASCII, "ascii", false, "Use ASCII connectors instead of Unicode box-drawing")
+
+	datasetCmd.AddCommand(datasetGetCmd, datasetAncestorsCmd, datasetValuesCmd)
 	rootCmd.AddCommand(datasetCmd)
 }

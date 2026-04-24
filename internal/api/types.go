@@ -9,10 +9,17 @@ type Pagination struct {
 	HasMore  bool `json:"has_more"`
 }
 
+type Warning struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
 type Meta struct {
 	Count       int         `json:"count,omitempty"`
 	Query       string      `json:"query,omitempty"`
 	Pagination  *Pagination `json:"pagination,omitempty"`
+	Warning     *Warning    `json:"warning,omitempty"`
 	GeneratedAt time.Time   `json:"generated_at"`
 }
 
@@ -94,10 +101,16 @@ type SeriesResponse struct {
 	Meta Meta   `json:"meta"`
 }
 
+type FixedValue struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
 type Dimension struct {
-	Key      string `json:"key"`
-	Label    string `json:"label"`
-	Position int    `json:"position"`
+	Key        string      `json:"key"`
+	Label      string      `json:"label"`
+	Position   int         `json:"position"`
+	FixedValue *FixedValue `json:"fixed_value,omitempty"`
 }
 
 type Dataset struct {

@@ -37,6 +37,25 @@ const seriesListResponseJSON = `{
   "meta": {"count": 2, "generated_at": "2026-04-22T18:00:00Z"}
 }`
 
+const seriesListTruncatedJSON = `{
+  "data": [
+    {
+      "ticker": "IT.LAMA.132/A",
+      "dimensions": [],
+      "values": [{"time":"2024","value":1.0}]
+    }
+  ],
+  "meta": {
+    "count": 1,
+    "warning": {
+      "code": "result_truncated",
+      "message": "Result set truncated to 500 items.",
+      "limit": 500
+    },
+    "generated_at": "2026-04-22T18:00:00Z"
+  }
+}`
+
 const seriesGetResponseJSON = `{
   "data": {
     "ticker": "IT.LAMA.132/M.IT.EMP.Y.9.Y15-24.9.9.CURRENT",
@@ -99,6 +118,44 @@ func TestSeriesList_NoMatches(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "Matched: 0 series") {
 		t.Errorf("output should show zero matches, got %q", buf.String())
+	}
+}
+
+func TestSeriesList_TruncationWarningSurfaced(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, seriesListTruncatedJSON, 0)
+
+	if err := runCLI(t, "series", "list", "IT.LAMA.132", "*"); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"Warning:",
+		"truncated",
+		"500",
+		"result_truncated",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("truncated response should surface warning banner; missing %q\n%s", want, out)
+		}
+	}
+	// Table must still render the (partial) data.
+	if !strings.Contains(out, "TICKER") || !strings.Contains(out, "IT.LAMA.132/A") {
+		t.Errorf("truncated response should still print the table:\n%s", out)
+	}
+}
+
+func TestSeriesList_NoWarningWhenUnset(t *testing.T) {
+	buf := loggedIn(t)
+	// Regression: the existing happy-path fixture carries no meta.warning,
+	// so the banner must not appear.
+	mockJSONAPI(t, seriesListResponseJSON, 0)
+
+	if err := runCLI(t, "series", "list", "IT.LAMA.132", "M.IT.EMP.Y.9.*.9.9.CURRENT"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "Warning:") {
+		t.Errorf("no warning in meta; banner must not appear:\n%s", buf.String())
 	}
 }
 

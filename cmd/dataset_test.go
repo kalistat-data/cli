@@ -29,6 +29,32 @@ const datasetGetResponseJSON = `{
   "meta": {"generated_at": "2026-04-22T18:00:00Z"}
 }`
 
+const datasetGetFixedValueJSON = `{
+  "data": {
+    "code": "IT.LAMA.132",
+    "name": "Main indicators",
+    "source": "istat",
+    "dataflow_id": "df",
+    "dimensions": [
+      {"label":"Frequency","position":1,"key":"FREQ"},
+      {"label":"Reference area","position":2,"key":"REF_AREA",
+        "fixed_value":{"code":"IT","name":"Italy"}}
+    ],
+    "time_dimensions": [{"label":"Time","position":10,"key":"TIME_PERIOD"}]
+  },
+  "meta": {}
+}`
+
+const datasetAncestorsJSON = `{
+  "data":[
+    {"key":"IT","name":"Italy","depth":-3},
+    {"key":"IT.5","name":"Labor market","depth":-2},
+    {"key":"IT.5.2.1","name":"Employed - monthly data","depth":-1},
+    {"key":"IT.LAMA.132","name":"Main indicators","depth":0}
+  ],
+  "meta":{}
+}`
+
 const datasetValuesResponseJSON = `{
   "data": [
     {"code":"Y15-24","name":"15-24 years","level":0},
@@ -162,6 +188,131 @@ func TestDatasetGet_NotLoggedInReturnsError(t *testing.T) {
 	}
 }
 
+func TestDatasetGet_FixedValueAddsColumn(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, datasetGetFixedValueJSON, 0)
+
+	if err := runCLI(t, "dataset", "get", "IT.LAMA.132"); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "FIXED VALUE") {
+		t.Errorf("expected FIXED VALUE column when any dimension is pinned:\n%s", out)
+	}
+	if !strings.Contains(out, "IT (Italy)") {
+		t.Errorf("expected fixed-value cell 'IT (Italy)':\n%s", out)
+	}
+	// Pinned column should render only on the dimensions table — time
+	// dimensions never carry fixed_value, so the time table must keep its
+	// 3-column layout and not grow a trailing empty column. We check this
+	// by confirming FIXED VALUE appears exactly once (dimensions header).
+	if n := strings.Count(out, "FIXED VALUE"); n != 1 {
+		t.Errorf("FIXED VALUE header should appear once, got %d:\n%s", n, out)
+	}
+}
+
+func TestDatasetGet_NoFixedValuePreservesThreeColumnLayout(t *testing.T) {
+	buf := loggedIn(t)
+	// Regression: the existing happy-path fixture has no fixed_value, so
+	// the table must stay exactly 3 columns.
+	mockJSONAPI(t, datasetGetResponseJSON, 0)
+
+	if err := runCLI(t, "dataset", "get", "IT.LAMA.132"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "FIXED VALUE") {
+		t.Errorf("no dimension is pinned; FIXED VALUE column must not appear:\n%s", buf.String())
+	}
+}
+
+func TestDatasetAncestors_BuildsCorrectURL(t *testing.T) {
+	loggedIn(t)
+	var path string
+	mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(datasetAncestorsJSON))
+	})
+
+	if err := runCLI(t, "dataset", "ancestors", "IT.LAMA.132"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(path, "/datasets/IT.LAMA.132/ancestors") {
+		t.Errorf("path = %q", path)
+	}
+}
+
+func TestDatasetAncestors_RendersTreeConnectors(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, datasetAncestorsJSON, 0)
+
+	if err := runCLI(t, "dataset", "ancestors", "IT.LAMA.132"); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	// Target (depth 0) is the dataset itself and must be flagged with '>'.
+	if !strings.Contains(out, "> IT.LAMA.132") {
+		t.Errorf("target line should be marked with '>':\n%s", out)
+	}
+	// The breadcrumb is a single chain — every non-root line uses the
+	// last-sibling connector.
+	if !strings.Contains(out, "└── IT.5  ") {
+		t.Errorf("expected tree connector at IT.5:\n%s", out)
+	}
+}
+
+func TestDatasetAncestors_ASCIIFlag(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, datasetAncestorsJSON, 0)
+
+	if err := runCLI(t, "dataset", "ancestors", "IT.LAMA.132", "--ascii"); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if strings.ContainsAny(out, "└├│") {
+		t.Errorf("ASCII mode must not emit box-drawing glyphs:\n%s", out)
+	}
+	if !strings.Contains(out, "`-- IT.5  ") {
+		t.Errorf("ASCII mode should use `-- connector:\n%s", out)
+	}
+}
+
+func TestDatasetAncestors_JSONPassthrough(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, datasetAncestorsJSON, 0)
+
+	if err := runCLI(t, "dataset", "ancestors", "IT.LAMA.132", "--json"); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &got); err != nil {
+		t.Fatalf("not valid JSON: %v\n%s", err, buf.String())
+	}
+	if _, ok := got["data"]; !ok {
+		t.Errorf("missing 'data' key")
+	}
+}
+
+func TestDatasetAncestors_EmptyList(t *testing.T) {
+	buf := loggedIn(t)
+	mockJSONAPI(t, `{"data":[],"meta":{}}`, 0)
+
+	if err := runCLI(t, "dataset", "ancestors", "X"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "No ancestors") {
+		t.Errorf("empty list should say 'No ancestors.', got: %q", buf.String())
+	}
+}
+
+func TestDatasetAncestors_NotLoggedInReturnsError(t *testing.T) {
+	resetCmd(t)
+
+	if err := runCLI(t, "dataset", "ancestors", "IT.LAMA.132"); err == nil {
+		t.Fatal("expected error when not logged in")
+	}
+}
+
 func TestDatasetValues_BuildsCorrectURL(t *testing.T) {
 	loggedIn(t)
 	var gotPath string
@@ -283,6 +434,8 @@ func TestDataset_RejectsPathTraversal(t *testing.T) {
 		{"get: dataset is ..", []string{"dataset", "get", ".."}},
 		{"get: dataset has slash", []string{"dataset", "get", "a/b"}},
 		{"get: dataset empty", []string{"dataset", "get", ""}},
+		{"ancestors: dataset is ..", []string{"dataset", "ancestors", ".."}},
+		{"ancestors: dataset has slash", []string{"dataset", "ancestors", "a/b"}},
 		{"values: dataset is ..", []string{"dataset", "values", "..", "AGE"}},
 		{"values: dim-key is ..", []string{"dataset", "values", "IT.LAMA.132", ".."}},
 		{"values: dim-key has slash", []string{"dataset", "values", "IT.LAMA.132", "A/B"}},
