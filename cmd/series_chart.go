@@ -96,12 +96,40 @@ func printSeriesChart(cmd *cobra.Command, s *api.Series, width, height int) erro
 	tslc := timeserieslinechart.New(width, height,
 		timeserieslinechart.WithXLabelFormatter(xLabelFormatter(freq, points)),
 	)
+	yMin, yMax := paddedYRange(points)
+	tslc.SetYRange(yMin, yMax)
+	tslc.SetViewYRange(yMin, yMax)
 	for _, p := range points {
 		tslc.Push(timeserieslinechart.TimePoint{Time: p.t, Value: p.v})
 	}
 	tslc.DrawBraille()
 	fmt.Fprintln(out, tslc.View())
 	return nil
+}
+
+// paddedYRange returns a Y-axis range that hugs the data: 10% margin on each
+// side of [min, max], expanded to a minimum total interval of 1.0 so a single
+// point or a constant series still produces a readable chart.
+func paddedYRange(points []chartPoint) (float64, float64) {
+	if len(points) == 0 {
+		return 0, 1
+	}
+	lo, hi := points[0].v, points[0].v
+	for _, p := range points[1:] {
+		if p.v < lo {
+			lo = p.v
+		}
+		if p.v > hi {
+			hi = p.v
+		}
+	}
+	margin := 0.1 * (hi - lo)
+	yMin, yMax := lo-margin, hi+margin
+	if yMax-yMin < 1.0 {
+		center := (lo + hi) / 2
+		yMin, yMax = center-0.5, center+0.5
+	}
+	return yMin, yMax
 }
 
 // parseObservations turns the API's string/pointer-float observations into

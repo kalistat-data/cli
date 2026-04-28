@@ -228,6 +228,44 @@ func TestParseObservations_DropsNilValuesAndCountsSkips(t *testing.T) {
 	}
 }
 
+func TestPaddedYRange(t *testing.T) {
+	const eps = 1e-9
+	cases := []struct {
+		name             string
+		values           []float64
+		wantMin, wantMax float64
+	}{
+		{"empty", nil, 0, 1},
+		// Range 100 → 10% margin = 10 each side → [90, 220].
+		{"wide range pads 10% each side", []float64{100, 200}, 90, 210},
+		// Range 0 → falls back to centered 1.0 interval.
+		{"single point", []float64{42}, 41.5, 42.5},
+		// Range 0 → centered 1.0 interval around the constant value.
+		{"constant series", []float64{7, 7, 7}, 6.5, 7.5},
+		// Range 0.4 → padded to 0.48, still under 1.0 → expand to 1.0 around center 5.
+		{"small range expands to minimum 1.0", []float64{4.8, 5.2}, 4.5, 5.5},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			pts := make([]chartPoint, len(c.values))
+			for i, v := range c.values {
+				pts[i] = chartPoint{v: v}
+			}
+			gotMin, gotMax := paddedYRange(pts)
+			if abs(gotMin-c.wantMin) > eps || abs(gotMax-c.wantMax) > eps {
+				t.Errorf("got [%g, %g], want [%g, %g]", gotMin, gotMax, c.wantMin, c.wantMax)
+			}
+		})
+	}
+}
+
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 func TestSeriesFrequency(t *testing.T) {
 	cases := []struct {
 		name string
